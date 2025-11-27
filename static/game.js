@@ -20,7 +20,7 @@ async function loadPuzzle(id) {
 function renderPuzzle(p) {
   const area = document.getElementById("puzzle-area");
 
-  // RSA
+  // 1) RSA
   if (p.id === "hash") {
     area.innerHTML = `
       <h3>${p.title}</h3>
@@ -33,59 +33,59 @@ function renderPuzzle(p) {
     return;
   }
 
-  // Phishing
+  // 2) Phishing / punycode
   if (p.id === "phishing") {
     area.innerHTML = `
       <h3>${p.title}</h3>
       <pre style="white-space:pre-wrap;">${p.email}</pre>
       <pre style="white-space:pre-wrap;">${p.description}</pre>
-      <label>Enter your analysis (ANSWER, e.g. 'punycode attack'):</label>
-      <input id="answer-input" placeholder="punycode attack" />
+      <label>Enter your analysis (ANSWER), e.g. "homoglyph domain impersonation":</label>
+      <input id="answer-input" placeholder="homoglyph domain impersonation" />
       <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
       <div id="result-msg" style="margin-top:6px;"></div>
     `;
     return;
   }
 
-  // JS reverse engineering
+  // 3) JS reverse engineering (6-digit PIN)
   if (p.id === "encrypt") {
     area.innerHTML = `
       <h3>${p.title}</h3>
-      <p style="font-size:0.9rem;">Reverse this JavaScript to find the ONE input string that validate() accepts.</p>
+      <p style="font-size:0.9rem;">Reverse this JavaScript to find the 6-digit PIN that validate() accepts.</p>
       <pre style="white-space:pre-wrap; font-size:0.8rem; background:#020617; padding:6px; border-radius:4px; border:1px solid #1f2937;">
 ${p.js_code}
       </pre>
       <pre style="white-space:pre-wrap;">${p.description}</pre>
-      <label>Enter the input string that passes validate (ANSWER):</label>
-      <input id="answer-input" placeholder="FLAG{...}" />
+      <label>Enter the 6-digit PIN (ANSWER):</label>
+      <input id="answer-input" placeholder="482913" />
       <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
       <div id="result-msg" style="margin-top:6px;"></div>
     `;
     return;
   }
 
-  // PNG forensics
+  // 4) PNG forensics
   if (p.id === "logs") {
     area.innerHTML = `
       <h3>${p.title}</h3>
       <pre style="white-space:pre-wrap;">${p.description}</pre>
       <p style="font-size:0.9rem;">Corrupted PNG (Base64):</p>
       <textarea readonly style="width:100%;height:120px;background:#020617;color:#e5e7eb;border:1px solid #1f2937;font-size:0.8rem;">${p.png_b64}</textarea>
-      <label>Enter the flag you recover from the PNG (ANSWER):</label>
-      <input id="answer-input" placeholder="FLAG{...}" />
+      <label>Enter the owner value you recover from the PNG metadata (ANSWER):</label>
+      <input id="answer-input" placeholder="night-guard-7" />
       <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
       <div id="result-msg" style="margin-top:6px;"></div>
     `;
     return;
   }
 
-  // Session prediction
+  // 5) Session prediction
   if (p.id === "firewall") {
     area.innerHTML = `
       <h3>${p.title}</h3>
       <pre style="white-space:pre-wrap;">${p.description}</pre>
       <label>Enter the predicted admin session ID (ANSWER), e.g. sess_900050:</label>
-      <input id="answer-input" placeholder="sess_...." />
+      <input id="answer-input" placeholder="sess_900050" />
       <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
       <div id="result-msg" style="margin-top:6px;"></div>
     `;

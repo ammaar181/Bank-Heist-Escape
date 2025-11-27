@@ -8,7 +8,7 @@ app.secret_key = "CHANGE_THIS_TO_SOMETHING_RANDOM_AND_SECRET"
 # ======================================================
 
 PUZZLES = {
-    # 1) RSA (crypto) – button: hash
+    # 1) RSA (crypto) – button: RSA Entrance
     "hash": {
         "id": "hash",
         "title": "RSA Entrance Override",
@@ -19,16 +19,18 @@ PUZZLES = {
             "Once you have that word, submit it here as the ANSWER (e.g. GOLD).\n"
             "If correct, you will be rewarded with a separate random flag.\n\n"
             "Public key parameters:\n"
-            "  n  = 3811776253\n"
+            "  n  = 1862243311\n"
             "  e  = 65537\n"
             "Ciphertext:\n"
-            "  c  = 1355013865\n"
+            "  c  = 129651874\n"
         ),
-        "solution": "GOLD",                       # what they type as answer
-        "flag": "FLAG{rsa_door_breach_8f2c}"      # reward flag
+        # Correct decrypted plaintext for those parameters
+        "solution": "GOLD",
+        # Reward flag (what they get AFTER solving)
+        "flag": "FLAG{rsa_door_breach_8f2c}"
     },
 
-    # 2) Punycode phishing – button: phishing
+    # 2) Punycode phishing – button: Email Forensics
     "phishing": {
         "id": "phishing",
         "title": "Punycode Phishing Alert",
@@ -36,7 +38,8 @@ PUZZLES = {
         "description": (
             "A security alert email claims to come from YourBank.\n"
             "Inspect the URL carefully and analyse what kind of trick is used.\n"
-            "Your ANSWER should be a short description such as 'punycode attack'.\n"
+            "Your ANSWER should briefly describe the attack, e.g.\n"
+            "\"homoglyph domain impersonation\".\n"
             "If you correctly identify the attack, you will be rewarded a flag.\n"
         ),
         "email": (
@@ -50,60 +53,63 @@ PUZZLES = {
             "Sincerely,\n"
             "YourBank Security Team\n"
         ),
-        "solution": "punycode attack",                    # or similar phrase
-        "flag": "FLAG{punycode_domain_trap_b13}"
+        # Accept text like "homoglyph domain impersonation"
+        "solution": "homoglyph domain impersonation",
+        "flag": "FLAG{phishing_identified_39ff}"
     },
 
-    # 3) JS reverse engineering – button: encrypt
+    # 3) JS reverse engineering – button: JS Keypad
     "encrypt": {
         "id": "encrypt",
         "title": "Keypad JavaScript Reverse Engineering",
         "type": "encrypt",
         "description": (
-            "The keypad runs a validate(input) function in JavaScript.\n"
-            "Reverse the code below to find the ONE input string that passes.\n"
-            "Enter that string here as the ANSWER.\n"
-            "If correct, you’ll be rewarded with a separate flag.\n"
+            "The keypad on the secure door runs entirely in JavaScript.\n"
+            "It calls a function validate(input) to decide if the code is correct.\n"
+            "The code below has been minified / obfuscated a bit.\n\n"
+            "Your job: reverse this logic and find the 6-digit PIN code that\n"
+            "validate(input) accepts. That numeric PIN (e.g. 482913) is your ANSWER.\n"
+            "If correct, you'll be rewarded with a separate flag.\n"
         ),
         "js_code": (
             "(function(){\n"
-            "  const x = atob(\"RkxBR3tyZXZlcnNlX2VuZ19qb3lfY29kZX0=\");\n"
-            "  const y = [5,2,1,6,7];\n"
-            "  function check(input){\n"
-            "    let a=\"\";\n"
-            "    for(let i=0;i<input.length;i++){\n"
-            "      a += String.fromCharCode(input.charCodeAt(i) ^ y[i % y.length]);\n"
-            "    }\n"
-            "    return a === x;\n"
+            "  const x = atob(\"NDgyOTEz\"); // base64 for the real PIN\n"
+            "  function validate(input){\n"
+            "    return input === x;\n"
             "  }\n"
-            "  window.validate = check;\n"
+            "  window.validate = validate;\n"
             "})();\n"
         ),
-        "solution": "FLAG{reverse_eng_joy_code}",          # what validate expects
-        "flag": "FLAG{js_reversed_9ad1}"                   # reward flag
+        # The decoded PIN from the JS
+        "solution": "482913",
+        "flag": "FLAG{js_reverse_cracked_a92b}"
     },
 
-    # 4) PNG forensics – button: logs
+    # 4) PNG forensics – button: Camera Forensics
     "logs": {
         "id": "logs",
         "title": "Security Camera Image Forensics",
         "type": "logs",
         "description": (
             "A camera snapshot was captured as a PNG file, but the header appears damaged.\n"
-            "Below is the corrupted file in Base64 form.\n"
-            "Decode it, repair the PNG header, and inspect the image/metadata locally.\n"
-            "Your ANSWER is the flag string you recover from the PNG.\n"
+            "Below is the corrupted file in Base64 form.\n\n"
+            "Decode it, repair the PNG header (first 8 bytes), and inspect the\n"
+            "image/metadata locally. Somewhere inside, an 'owner' field is stored.\n\n"
+            "Your ANSWER is the value of that owner field (e.g. night-guard-7).\n"
             "If correct, you’ll receive a separate reward flag.\n"
         ),
+        # PNG with first 8 bytes zeroed; metadata includes "owner=night-guard-7"
         "png_b64": (
-            "AAAAAAAAAAAAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAAHnRFWHRmbGFnPUZMQUd7cG5nX2hl\n"
-            "YWRlcl9yZXN0b3JlZH35Gtn/AAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC\n"
+            "AAAAAAAAAAAAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAAHnRFWHRvd25lcj1u"
+            "aWdodC1ndWFyZC03ICAgICAgICAgICD5Gtn/AAAADElEQVR4nGNgYGAAAAAEAAH2"
+            "FzhVAAAAAElFTkSuQmCC"
         ),
-        "solution": "FLAG{png_header_restored}",           # recovered from image
-        "flag": "FLAG{forensic_png_mended_42}"
+        # What we expect the student to answer
+        "solution": "night-guard-7",
+        "flag": "FLAG{png_forensics_79aa}"
     },
 
-    # 5) Session ID prediction – button: firewall
+    # 5) Session ID prediction – button: Session Analysis
     "firewall": {
         "id": "firewall",
         "title": "Session Prediction – Vault Console",
@@ -115,12 +121,12 @@ PUZZLES = {
             "  [INFO] user login   session = sess_900020\n"
             "  [INFO] user login   session = sess_900030\n"
             "  [INFO] your login   session = sess_900040\n\n"
-            "The admin login occurs directly after yours.\n"
+            "The admin login happens after yours following the same pattern.\n"
             "Infer the admin's session ID and enter it here as the ANSWER\n"
             "(e.g. sess_900050). If correct, you will be rewarded a flag.\n"
         ),
-        "solution": "sess_900050",                         # NOT printed anywhere
-        "flag": "FLAG{session_predicted_7e0a}"
+        "solution": "sess_900050",
+        "flag": "FLAG{session_predicted_c71d}"
     },
 }
 
@@ -150,7 +156,7 @@ def api_check_vault():
         return jsonify({"opened": False, "missing": missing})
 
 # ======================================================
-# BASIC ROUTES (UI stays same)
+# BASIC ROUTES (UI unchanged)
 # ======================================================
 
 @app.route("/")
@@ -202,12 +208,19 @@ def api_submit_answer(pid):
     data = request.get_json(silent=True) or {}
     answer = (data.get("answer") or "").strip()
 
-    # simple case-insensitive check for textual answers,
-    # exact match for FLAG-like ones.
     sol = p["solution"]
-    if sol.startswith("FLAG{"):
+
+    # Textual answers (case-insensitive)
+    if sol.startswith("sess_") or sol.isdigit():
+        # exact match for session IDs and numeric codes
         correct = (answer == sol)
+    elif sol.startswith("night-guard"):
+        correct = (answer.lower() == sol.lower())
+    elif sol.isupper() and len(sol) == 4:
+        # GOLD-style 4-letter code
+        correct = (answer.upper() == sol)
     else:
+        # general text (case-insensitive)
         correct = (answer.lower() == sol.lower())
 
     if correct:
@@ -225,8 +238,7 @@ def api_submit_flag():
     data = request.get_json(silent=True) or {}
     flag = (data.get("flag") or "").strip()
 
-    # Check against known flags
-    valid_flags = {p["flag"]: p_id for p_id, p in PUZZLES.items()}
+    valid_flags = {p["flag"]: pid for pid, p in PUZZLES.items()}
     if flag in valid_flags:
         already = flag in session.get("flags", [])
         give_flag(flag)
