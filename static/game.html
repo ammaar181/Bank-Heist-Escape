@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Control Room</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="room">
+
+  <div class="panel-left">
+    <h2>Systems</h2>
+    <button onclick="loadPuzzle('password')">Keypad Door</button>
+    <button onclick="loadPuzzle('phishing')">Security Email</button>
+    <button onclick="loadPuzzle('cipher')">Encryption Lock</button>
+    <button onclick="loadPuzzle('logs')">Camera Logs</button>
+    <button onclick="loadPuzzle('vault')">Vault Firewall</button>
+  </div>
+
+  <div class="panel-center">
+    <img src="/static/assets/vault_closed.png" class="vault" id="vault">
+    <img src="/static/assets/camera.png" class="camera">
+    <div class="alarm-light"></div>
+  </div>
+
+    <div class="panel-right">
+    <h2>Terminal</h2>
+    <div id="terminal-output" class="terminal"></div>
+
+    <h2>Puzzle</h2>
+    <div id="puzzle-area" class="puzzle-area">
+      <p>Select a system on the left to load a puzzle.</p>
+    </div>
+  </div>
+
+
+<script src="/static/game.js"></script>
+</body>
+</html>
