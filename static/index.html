@@ -1,102 +1,43 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Bank Heist: Cyber Escape</title>
-
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: linear-gradient(#000000, #0a0f1f);
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      color: white;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
-    }
-
-    .intro-card {
-      text-align: center;
-      padding: 40px 60px;
-      background: rgba(0, 0, 0, 0.7);
-      border: 2px solid #1e293b;
-      border-radius: 12px;
-      box-shadow: 0 0 30px rgba(0, 150, 255, 0.3);
-      animation: fadeIn 1.2s ease-out forwards;
-      opacity: 0;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(25px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .title {
-      font-size: 2.4rem;
-      margin-bottom: 10px;
-      text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-    }
-
-    .subtitle {
-      font-size: 1.1rem;
-      color: #a3a3a3;
-      margin-bottom: 25px;
-    }
-
-    .alarm {
-      width: 16px;
-      height: 16px;
-      margin: 0 auto 15px;
-      background-color: red;
-      border-radius: 50%;
-      animation: pulse 0.8s infinite;
-    }
-
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.15; }
-      100% { opacity: 1; }
-    }
-
-    .btn-start {
-      background-color: #22c55e;
-      color: #001b12;
-      padding: 12px 26px;
-      font-size: 1rem;
-      font-weight: bold;
-      border-radius: 40px;
-      border: none;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-
-    .btn-start:hover {
-      transform: scale(1.05);
-      box-shadow: 0 0 10px #22c55e;
-    }
-  </style>
-
+<meta charset="UTF-8">
+<title>Bank Heist: CTF Escape</title>
+<style>
+body {
+  margin: 0;
+  background: #00040f;
+  font-family: Arial;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+.card {
+  text-align: center;
+  padding: 40px;
+  border: 1px solid #1e293b;
+  background: #020617;
+  border-radius: 12px;
+}
+button {
+  padding: 12px 20px;
+  border: none;
+  background: #22c55e;
+  color: black;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+}
+</style>
 </head>
 
 <body>
-  <div class="intro-card">
-    <div class="alarm"></div>
-    <div class="title">Bank Heist: Cyber Escape</div>
-    <div class="subtitle">
-      Your mission: Infiltrate the bank's security systems,<br>
-      bypass every digital defense, and open the vault.
-    </div>
-    <button class="btn-start" onclick="window.location.href='/game'">Begin Heist</button>
-  </div>
-
-  <script>
-    function startHeist() {
-      alert("Next: We build the main game control room UI!");
-      // This will later load the real game interface
-    }
-  </script>
+<div class="card">
+  <h1>Bank Heist: CTF Cyber Escape</h1>
+  <p>Complete all challenges and collect all flags to open the vault.</p>
+  <button onclick="location.href='/game'">BEGIN HEIST</button>
+</div>
 </body>
 </html>

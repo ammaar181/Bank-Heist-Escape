@@ -1,8 +1,9 @@
+/* Global */
 body {
   margin: 0;
-  background: #0a0f1f;
-  color: white;
-  font-family: Arial;
+  background: #020617;
+  color: #e5e7eb;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 /* Layout */
@@ -11,69 +12,45 @@ body {
   height: 100vh;
 }
 
-.panel-left, .panel-right {
-  width: 22%;
+/* Left & right panels */
+.panel-left,
+.panel-right {
+  width: 24%;
   padding: 20px;
   background: #0f172a;
   border-right: 1px solid #1e293b;
+  box-sizing: border-box;
 }
 
+/* Center panel */
 .panel-center {
   flex: 1;
-  position: relative;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  background: #020617;
+  border-right: 1px solid #1e293b;
+  box-sizing: border-box;
 }
 
-/* Vault */
-.vault {
-  width: 260px;
-  cursor: pointer;
-}
-
-/* Camera animation */
-.camera {
-  width: 140px;
-  position: absolute;
-  top: 40px;
-  right: 60px;
-  animation: sweep 3s infinite alternate;
-}
-
-@keyframes sweep {
-  0% { transform: rotate(-20deg); }
-  100% { transform: rotate(20deg); }
-}
-
-/* Alarm */
-.alarm-light {
-  width: 20px;
-  height: 20px;
-  background: red;
-  border-radius: 50%;
-  position: absolute;
-  top: 40px;
-  left: 40px;
-  animation: blink 0.7s infinite;
-}
-
-@keyframes blink {
-  0% { opacity: 1; }
-  50% { opacity: 0.15; }
-  100% { opacity: 1; }
+.vault-status {
+  font-size: 2rem;
+  letter-spacing: 0.08em;
+  padding: 16px 24px;
+  border-radius: 999px;
+  border: 2px solid #4b5563;
 }
 
 /* Buttons */
 button {
   width: 100%;
   padding: 10px;
-  margin-bottom: 10px;
-  background: #1e3a8a;
+  margin-bottom: 8px;
+  background: #1d4ed8;
+  color: #e5e7eb;
   border: none;
-  color: white;
-  font-size: 1rem;
   border-radius: 6px;
+  font-size: 0.95rem;
   cursor: pointer;
 }
 
@@ -81,16 +58,19 @@ button:hover {
   background: #3b82f6;
 }
 
-/* Terminal */
+/* Terminal & puzzle area */
 .terminal {
-  background: black;
-  height: 85vh;
-  border: 1px solid #334155;
-  padding: 10px;
+  background: #020617;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  padding: 8px;
+  height: 40vh;
   overflow-y: auto;
-  font-family: monospace;
-  font-size: 0.9rem;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  box-sizing: border-box;
 }
+
 .puzzle-area {
   margin-top: 10px;
   background: #020617;
@@ -98,17 +78,48 @@ button:hover {
   border-radius: 6px;
   padding: 10px;
   font-size: 0.9rem;
+  box-sizing: border-box;
 }
-.puzzle-area input {
+
+.puzzle-area input,
+.puzzle-area textarea {
   width: 100%;
-  padding: 6px;
   margin-top: 6px;
   margin-bottom: 8px;
+  padding: 6px;
   border-radius: 4px;
-  border: 1px solid #4b5563;
+  border: 1px solid #334155;
   background: #020617;
   color: #e5e7eb;
+  font-family: inherit;
+  font-size: 0.85rem;
+  box-sizing: border-box;
 }
-.puzzle-area button {
-  width: auto;
+
+/* Flag console bits */
+.divider {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px solid #1e293b;
+}
+
+.small-text {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.flag-input {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid #334155;
+  background: #020617;
+  color: #e5e7eb;
+  box-sizing: border-box;
+}
+
+/* Headings */
+h2, h3 {
+  margin-top: 0;
 }

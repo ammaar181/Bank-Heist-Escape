@@ -1,40 +1,57 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <title>Control Room</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
+  <div class="room">
 
-<div class="room">
+    <!-- LEFT PANEL: systems + flag console -->
+    <div class="panel-left">
+      <h2>Systems</h2>
+      <button onclick="loadPuzzle('hash')">RSA Entrance</button>
+      <button onclick="loadPuzzle('phishing')">Email Forensics</button>
+      <button onclick="loadPuzzle('encrypt')">JS Keypad</button>
+      <button onclick="loadPuzzle('logs')">Camera Forensics</button>
+      <button onclick="loadPuzzle('firewall')">Session Analysis</button>
+      <button onclick="attemptVault()">Open Vault</button>
 
-  <div class="panel-left">
-    <h2>Systems</h2>
-    <button onclick="loadPuzzle('password')">Keypad Door</button>
-    <button onclick="loadPuzzle('phishing')">Security Email</button>
-    <button onclick="loadPuzzle('cipher')">Encryption Lock</button>
-    <button onclick="loadPuzzle('logs')">Camera Logs</button>
-    <button onclick="loadPuzzle('vault')">Vault Firewall</button>
-  </div>
+      <hr class="divider">
 
-  <div class="panel-center">
-    <img src="/static/assets/vault_closed.png" class="vault" id="vault">
-    <img src="/static/assets/camera.png" class="camera">
-    <div class="alarm-light"></div>
-  </div>
+      <h3>Flag Console</h3>
+      <p class="small-text">
+        When you solve a challenge, it will reveal a flag like <code>FLAG{...}</code>.<br>
+        Paste it here to register it.
+      </p>
+      <input id="flag-input" class="flag-input" placeholder="FLAG{...}">
+      <button onclick="submitFlag()">Submit Flag</button>
 
-    <div class="panel-right">
-    <h2>Terminal</h2>
-    <div id="terminal-output" class="terminal"></div>
-
-    <h2>Puzzle</h2>
-    <div id="puzzle-area" class="puzzle-area">
-      <p>Select a system on the left to load a puzzle.</p>
+      <p class="small-text" style="margin-top:8px;">
+        Collected flags are tracked per session.
+      </p>
     </div>
+
+    <!-- CENTER PANEL: vault status -->
+    <div class="panel-center">
+      <div id="vault-status" class="vault-status">VAULT CLOSED</div>
+    </div>
+
+    <!-- RIGHT PANEL: terminal + puzzle area -->
+    <div class="panel-right">
+      <h2>Terminal</h2>
+      <div id="terminal" class="terminal"></div>
+
+      <h2>Puzzle</h2>
+      <div id="puzzle-area" class="puzzle-area">
+        <p>Select a system on the left to load a challenge.</p>
+      </div>
+    </div>
+
   </div>
 
-
-<script src="/static/game.js"></script>
+  <script src="/static/game.js"></script>
 </body>
 </html>
