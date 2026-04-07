@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Heist System</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="game-body">
+    <div class="game-bg"></div>
+
+    <main class="game-wrap">
+        <header class="game-header">
+            <div>
+                <div class="eyebrow">BANK NETWORK // LIVE OPERATION</div>
+                <h1 class="system-title">BANK HEIST SYSTEM</h1>
+            </div>
+            <div class="live-status" id="status-pill">Operation Active</div>
+        </header>
+
+        <section class="hud-row">
+            <div class="hud-card">
+                <div class="hud-label">Progress</div>
+                <div class="hud-value" id="progress-text">1 / 4</div>
+            </div>
+
+            <div class="hud-card wide-card">
+                <div class="hud-label">Objective</div>
+                <div class="hud-value" id="objective-text">Loading...</div>
+            </div>
+        </section>
+
+        <section class="progress-box">
+            <div class="progress-meta">
+                <span>Operation Progress</span>
+                <span id="progress-percentage">0%</span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-bar-fill" id="progress-fill"></div>
+            </div>
+        </section>
+
+        <section class="game-grid">
+            <div class="panel main-panel">
+                <div class="panel-tag">CURRENT CHALLENGE</div>
+                <h2 id="challenge-title">Loading challenge...</h2>
+                <p class="panel-text" id="challenge-desc">Retrieving challenge data...</p>
+
+                <div class="brief-box">
+                    <div class="brief-label">Task Brief</div>
+                    <div class="brief-text" id="task-brief">Loading task brief...</div>
+                </div>
+
+                <div id="phase-content"></div>
+
+                <div class="answer-section" id="answer-section">
+                    <label class="answer-label" for="answer-input" id="answer-label">Enter your answer</label>
+                    <div class="answer-row">
+                        <input type="text" id="answer-input" placeholder="Type your answer here">
+                        <button class="main-btn" onclick="submitAnswer()">Submit</button>
+                    </div>
+                </div>
+
+                <div class="message-box neutral" id="result">Awaiting answer...</div>
+            </div>
+
+            <aside class="panel side-panel">
+                <div class="panel-tag">OFFLINE SUPPORT</div>
+                <h3>Inside Man</h3>
+                <p class="panel-text">
+                    Your insider cannot touch the system directly, but can feed you clues to keep the operation moving.
+                </p>
+                <ul class="hint-list" id="hint-list">
+                    <li>Loading hints...</li>
+                </ul>
+
+                <div class="brief-box" style="margin-top: 18px;">
+                    <div class="brief-label">Recovered Vault Fragments</div>
+                    <div class="brief-text" id="vault-fragments">None yet</div>
+                </div>
+
+                <div class="brief-box" style="margin-top: 18px;">
+                    <div class="brief-label">Recovered Evidence</div>
+                    <div class="brief-text" id="recovered-evidence">No evidence recovered yet.</div>
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <script src="/static/game.js"></script>
+</body>
+</html>

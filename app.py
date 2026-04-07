@@ -1,254 +1,325 @@
-from flask import Flask, send_from_directory, jsonify, request, session
+from flask import Flask, render_template, request, jsonify, session
+import os
+import base64
 
-app = Flask(__name__, static_folder="static", static_url_path="/static")
-app.secret_key = "CHANGE_THIS_TO_SOMETHING_RANDOM_AND_SECRET"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ======================================================
-# PUZZLES: each has a solution (answer) and a separate flag (reward)
-# ======================================================
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "bank-heist-escape", "templates"),
+    static_folder=os.path.join(BASE_DIR, "static"),
+    static_url_path="/static"
+)
 
-PUZZLES = {
-    # 1) RSA (crypto) – button: RSA Entrance
-    "hash": {
-        "id": "hash",
-        "title": "RSA Entrance Override",
-        "type": "hash",
-        "description": (
-            "The guard encrypted the entrance override code using RSA.\n"
-            "Your goal: recover the underlying 4-letter metal word (all caps).\n"
-            "Once you have that word, submit it here as the ANSWER (e.g. GOLD).\n"
-            "If correct, you will be rewarded with a separate random flag.\n\n"
-            "Public key parameters:\n"
-            "  n  = 1862243311\n"
-            "  e  = 65537\n"
-            "Ciphertext:\n"
-            "  c  = 129651874\n"
+app.secret_key = "supersecretkey"
+
+
+def get_initial_state():
+    return {
+        "progress": 1,
+        "crack_completed": False,
+        "decode_completed": False,
+        "vault_fragments": [],
+        "phase_answers": {}
+    }
+
+
+def get_state():
+    if "game_state" not in session:
+        session["game_state"] = get_initial_state()
+    return session["game_state"]
+
+
+def save_state(state):
+    session["game_state"] = state
+    session.modified = True
+
+
+CHALLENGES = {
+    1: {
+        "title": "Phase 1: Password Cracking",
+        "description": "A bank employee reused a weak password. Crack the leaked hash using the wordlist simulator.",
+        "objective": "Recover the employee password.",
+        "task_brief": (
+            "Use the crack simulator to test the leaked wordlist against the employee hash. "
+            "Once the password is revealed, submit it to unlock the next layer."
         ),
-        # Correct decrypted plaintext for those parameters
-        "solution": "GOLD",
-        # Reward flag (what they get AFTER solving)
-        "flag": "FLAG{rsa_door_breach_8f2c}"
+        "answer": "vaultrunner9",
+        "answer_label": "Enter the cracked password",
+        "vault_fragment": "7",
+        "hints": [
+            "You need to run the crack first.",
+            "The answer is not shown until a password match is found.",
+            "Watch the terminal output carefully."
+        ]
     },
-
-    # 2) Punycode phishing – button: Email Forensics
-    "phishing": {
-        "id": "phishing",
-        "title": "Punycode Phishing Alert",
-        "type": "phishing",
-        "description": (
-            "A security alert email claims to come from YourBank.\n"
-            "Inspect the URL carefully and analyse what kind of trick is used.\n"
-            "Your ANSWER should briefly describe the attack, e.g.\n"
-            "\"homoglyph domain impersonation\".\n"
-            "If you correctly identify the attack, you will be rewarded a flag.\n"
+    2: {
+        "title": "Phase 2: Log Analysis",
+        "description": "Security logs show one hostile source probing the bank systems before gaining access.",
+        "objective": "Identify the suspicious attacker IP address.",
+        "task_brief": (
+            "Inspect the authentication logs. Look for repeated failed login attempts followed by a successful breach. "
+            "Submit the suspicious IP address."
         ),
-        "email": (
-            "From: security@yourbank.com\n"
-            "Subject: IMPORTANT: Verify your account immediately\n\n"
-            "Dear customer,\n\n"
-            "We detected unusual activity on your account.\n"
-            "Please verify your identity using the secure link below:\n\n"
-            "  https://www.xn--yourbnk-3ya.com/security/update\n\n"
-            "If you do not respond within 24 hours, your account may be locked.\n\n"
-            "Sincerely,\n"
-            "YourBank Security Team\n"
-        ),
-        # Accept text like "homoglyph domain impersonation"
-        "solution": "homoglyph domain impersonation",
-        "flag": "FLAG{phishing_identified_39ff}"
+        "answer": "185.217.92.14",
+        "answer_label": "Enter the suspicious IP",
+        "vault_fragment": "3",
+        "hints": [
+            "Look for a burst of failures before one success.",
+            "The attacker IP is not internal bank traffic.",
+            "One external address stands out clearly."
+        ]
     },
-
-    # 3) JS reverse engineering – button: JS Keypad
-    "encrypt": {
-        "id": "encrypt",
-        "title": "Keypad JavaScript Reverse Engineering",
-        "type": "encrypt",
-        "description": (
-            "The keypad on the secure door runs entirely in JavaScript.\n"
-            "It calls a function validate(input) to decide if the code is correct.\n"
-            "The code below has been minified / obfuscated a bit.\n\n"
-            "Your job: reverse this logic and find the 6-digit PIN code that\n"
-            "validate(input) accepts. That numeric PIN (e.g. 482913) is your ANSWER.\n"
-            "If correct, you'll be rewarded with a separate flag.\n"
+    3: {
+        "title": "Phase 3: Encoded Internal Message",
+        "description": "An intercepted internal relay message contains the next access clue, but it is encoded.",
+        "objective": "Decode the hidden relay token.",
+        "task_brief": (
+            "Use the in-game decoder on the captured message. Extract the relay token from the decoded text "
+            "and submit it as your answer."
         ),
-        "js_code": (
-            "(function(){\n"
-            "  const x = atob(\"NDgyOTEz\"); // base64 for the real PIN\n"
-            "  function validate(input){\n"
-            "    return input === x;\n"
-            "  }\n"
-            "  window.validate = validate;\n"
-            "})();\n"
-        ),
-        # The decoded PIN from the JS
-        "solution": "482913",
-        "flag": "FLAG{js_reverse_cracked_a92b}"
+        "answer": "nightglass",
+        "answer_label": "Enter the decoded relay token",
+        "vault_fragment": "9",
+        "hints": [
+            "This is encoding, not encryption.",
+            "Run the decoder first.",
+            "The token appears in readable English after decoding."
+        ]
     },
-
-    # 4) PNG forensics – button: Camera Forensics
-    "logs": {
-        "id": "logs",
-        "title": "Security Camera Image Forensics",
-        "type": "logs",
-        "description": (
-            "A camera snapshot was captured as a PNG file, but the header appears damaged.\n"
-            "Below is the corrupted file in Base64 form.\n\n"
-            "Decode it, repair the PNG header (first 8 bytes), and inspect the\n"
-            "image/metadata locally. Somewhere inside, an 'owner' field is stored.\n\n"
-            "Your ANSWER is the value of that owner field (e.g. night-guard-7).\n"
-            "If correct, you’ll receive a separate reward flag.\n"
+    4: {
+        "title": "Phase 4: Final Vault Access",
+        "description": "You have reached the core vault terminal. Reassemble the final access code using evidence recovered earlier.",
+        "objective": "Construct the final vault code.",
+        "task_brief": (
+            "Use the three recovered vault fragments in phase order, then append the length of the cracked password "
+            "from Phase 1. Submit the final vault code."
         ),
-        # PNG with first 8 bytes zeroed; metadata includes "owner=night-guard-7"
-        "png_b64": (
-            "AAAAAAAAAAAAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAAHnRFWHRvd25lcj1u"
-            "aWdodC1ndWFyZC03ICAgICAgICAgICD5Gtn/AAAADElEQVR4nGNgYGAAAAAEAAH2"
-            "FzhVAAAAAElFTkSuQmCC"
-        ),
-        # What we expect the student to answer
-        "solution": "night-guard-7",
-        "flag": "FLAG{png_forensics_79aa}"
-    },
-
-    # 5) Session ID prediction – button: Session Analysis
-    "firewall": {
-        "id": "firewall",
-        "title": "Session Prediction – Vault Console",
-        "type": "firewall",
-        "description": (
-            "The vault console uses session IDs of the form sess_<number>.\n"
-            "From the logs you observed several user sessions:\n\n"
-            "  [INFO] user login   session = sess_900010\n"
-            "  [INFO] user login   session = sess_900020\n"
-            "  [INFO] user login   session = sess_900030\n"
-            "  [INFO] your login   session = sess_900040\n\n"
-            "The admin login happens after yours following the same pattern.\n"
-            "Infer the admin's session ID and enter it here as the ANSWER\n"
-            "(e.g. sess_900050). If correct, you will be rewarded a flag.\n"
-        ),
-        "solution": "sess_900050",
-        "flag": "FLAG{session_predicted_c71d}"
-    },
+        "answer": "73912",
+        "answer_label": "Enter the final vault code",
+        "vault_fragment": None,
+        "hints": [
+            "You already collected everything you need.",
+            "Fragments come first, in phase order.",
+            "Then append the Phase 1 cracked password length."
+        ]
+    }
 }
 
-# ======================================================
-# FLAG STORAGE + VAULT
-# ======================================================
 
-def give_flag(flag_str: str):
-    flags = session.get("flags", [])
-    if flag_str not in flags:
-        flags.append(flag_str)
-        session["flags"] = flags
+CRACK_SIM = {
+    "username": "e.mercer",
+    "hash_type": "MD5",
+    "hash": "6f2ebf3c1f19f8c6e5953e8a0d31a59f",
+    "wordlist": [
+        "welcome1",
+        "banksecure",
+        "winter2024",
+        "vaultrunner9",
+        "letmein123"
+    ],
+    "correct_password": "vaultrunner9"
+}
 
-@app.route("/api/flags")
-def api_flags():
-    return jsonify(session.get("flags", []))
+LOG_ROWS = [
+    {"time": "01:11:03", "user": "svc.backup", "ip": "10.0.4.12", "event": "LOGIN_SUCCESS", "status": "Normal"},
+    {"time": "01:13:42", "user": "r.turner", "ip": "10.0.5.33", "event": "LOGIN_SUCCESS", "status": "Normal"},
+    {"time": "02:44:11", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
+    {"time": "02:44:16", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
+    {"time": "02:44:21", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
+    {"time": "02:44:29", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_SUCCESS", "status": "Critical"},
+    {"time": "03:01:08", "user": "svc.payroll", "ip": "10.0.8.44", "event": "LOGIN_SUCCESS", "status": "Normal"},
+    {"time": "03:09:51", "user": "j.finch", "ip": "10.0.6.21", "event": "LOGIN_FAILED", "status": "Normal"}
+]
 
-@app.route("/api/check_vault")
-def api_check_vault():
-    flags = session.get("flags", [])
-    needed = [p["flag"] for p in PUZZLES.values()]
-    opened = all(f in flags for f in needed)
-    if opened:
-        return jsonify({"opened": True, "final_flag": "FLAG{bank_heist_complete}"})
-    else:
-        missing = [f for f in needed if f not in flags]
-        return jsonify({"opened": False, "missing": missing})
+ENCODED_TEXT = base64.b64encode(
+    b"Vault relay token: NIGHTGLASS"
+).decode("utf-8")
 
-# ======================================================
-# BASIC ROUTES (UI unchanged)
-# ======================================================
 
 @app.route("/")
 def index():
-    return send_from_directory("static", "index.html")
+    session["game_state"] = get_initial_state()
+    return render_template("index.html")
+
 
 @app.route("/game")
 def game():
-    return send_from_directory("static", "game.html")
+    get_state()
+    return render_template("game.html")
 
-# ======================================================
-# PUZZLE API – sends description + artifacts (no solutions/flags)
-# ======================================================
 
-@app.route("/api/puzzle/<pid>")
-def api_get_puzzle(pid):
-    p = PUZZLES.get(pid)
-    if not p:
-        return jsonify({"error": "not found"}), 404
+@app.route("/get_game_state")
+def get_game_state():
+    state = get_state()
+    progress = state["progress"]
+    total = len(CHALLENGES)
 
-    data = {
-        "id": p["id"],
-        "title": p["title"],
-        "type": p["type"],
-        "description": p["description"],
-    }
+    if progress > total:
+        return jsonify({
+            "completed": True,
+            "progress": total,
+            "total": total,
+            "title": "Vault Entered",
+            "description": "The final vault door slides open. The bank reserves are exposed.",
+            "objective": "Operation Complete",
+            "task_brief": "You completed all four phases and breached the vault.",
+            "answer_label": "",
+            "hints": [
+                "Inside Man: Clean job. Grab what you came for and get out.",
+                "All security layers have been bypassed."
+            ],
+            "vault_fragments": state["vault_fragments"],
+            "phase_answers": state["phase_answers"]
+        })
 
-    if p["id"] == "phishing":
-        data["email"] = p["email"]
+    challenge = CHALLENGES[progress]
 
-    if p["id"] == "encrypt":
-        data["js_code"] = p["js_code"]
+    return jsonify({
+        "completed": False,
+        "progress": progress,
+        "total": total,
+        "title": challenge["title"],
+        "description": challenge["description"],
+        "objective": challenge["objective"],
+        "task_brief": challenge["task_brief"],
+        "answer_label": challenge["answer_label"],
+        "hints": challenge["hints"],
+        "vault_fragments": state["vault_fragments"],
+        "phase_answers": state["phase_answers"],
+        "crack_completed": state["crack_completed"],
+        "decode_completed": state["decode_completed"]
+    })
 
-    if p["id"] == "logs":
-        data["png_b64"] = p["png_b64"]
 
-    return jsonify(data)
+@app.route("/run_crack", methods=["POST"])
+def run_crack():
+    state = get_state()
 
-# ======================================================
-# ANSWER SUBMISSION – checks solution, REVEALS reward flag
-# ======================================================
+    if state["progress"] != 1:
+        return jsonify({"success": False, "message": "Password cracking is not active right now."})
 
-@app.route("/api/submit_answer/<pid>", methods=["POST"])
-def api_submit_answer(pid):
-    p = PUZZLES.get(pid)
-    if not p:
-        return jsonify({"error": "unknown puzzle"}), 404
+    state["crack_completed"] = True
+    save_state(state)
+
+    lines = [f"[*] Starting crack for user: {CRACK_SIM['username']}"]
+    for word in CRACK_SIM["wordlist"]:
+        if word == CRACK_SIM["correct_password"]:
+            lines.append(f"[+] trying: {word}")
+            lines.append(f"[MATCH FOUND] password = {word}")
+            break
+        lines.append(f"[-] trying: {word}")
+
+    return jsonify({
+        "success": True,
+        "lines": lines,
+        "password": CRACK_SIM["correct_password"]
+    })
+
+
+@app.route("/get_logs")
+def get_logs():
+    state = get_state()
+
+    if state["progress"] != 2:
+        return jsonify({"success": False, "rows": []})
+
+    event_filter = request.args.get("filter", "ALL").upper()
+
+    if event_filter == "FAILED":
+        rows = [r for r in LOG_ROWS if r["event"] == "LOGIN_FAILED"]
+    elif event_filter == "SUCCESS":
+        rows = [r for r in LOG_ROWS if r["event"] == "LOGIN_SUCCESS"]
+    else:
+        rows = LOG_ROWS
+
+    return jsonify({"success": True, "rows": rows})
+
+
+@app.route("/decode_message", methods=["POST"])
+def decode_message():
+    state = get_state()
+
+    if state["progress"] != 3:
+        return jsonify({"success": False, "message": "Decoder is not active right now."})
+
+    state["decode_completed"] = True
+    save_state(state)
+
+    decoded = base64.b64decode(ENCODED_TEXT.encode("utf-8")).decode("utf-8")
+
+    return jsonify({
+        "success": True,
+        "encoded": ENCODED_TEXT,
+        "decoded": decoded
+    })
+
+
+@app.route("/submit_answer", methods=["POST"])
+def submit_answer():
+    state = get_state()
+    progress = state["progress"]
+    total = len(CHALLENGES)
+
+    if progress > total:
+        return jsonify({"success": True, "message": "Vault already breached.", "completed": True})
 
     data = request.get_json(silent=True) or {}
-    answer = (data.get("answer") or "").strip()
+    answer = str(data.get("answer", "")).strip().lower()
 
-    sol = p["solution"]
+    challenge = CHALLENGES[progress]
+    correct = challenge["answer"].strip().lower()
 
-    # Textual answers (case-insensitive)
-    if sol.startswith("sess_") or sol.isdigit():
-        # exact match for session IDs and numeric codes
-        correct = (answer == sol)
-    elif sol.startswith("night-guard"):
-        correct = (answer.lower() == sol.lower())
-    elif sol.isupper() and len(sol) == 4:
-        # GOLD-style 4-letter code
-        correct = (answer.upper() == sol)
-    else:
-        # general text (case-insensitive)
-        correct = (answer.lower() == sol.lower())
+    if progress == 1 and not state["crack_completed"]:
+        return jsonify({
+            "success": False,
+            "message": "Run the crack simulator before submitting an answer.",
+            "completed": False
+        })
 
-    if correct:
-        # return the reward flag but do NOT auto-register it
-        return jsonify({"correct": True, "reward_flag": p["flag"]})
-    else:
-        return jsonify({"correct": False})
+    if progress == 3 and not state["decode_completed"]:
+        return jsonify({
+            "success": False,
+            "message": "Run the decoder before submitting an answer.",
+            "completed": False
+        })
 
-# ======================================================
-# FLAG SUBMISSION – player enters flags they’ve earned
-# ======================================================
+    if answer != correct:
+        return jsonify({
+            "success": False,
+            "message": "Incorrect answer — try again.",
+            "completed": False
+        })
 
-@app.route("/api/submit_flag", methods=["POST"])
-def api_submit_flag():
-    data = request.get_json(silent=True) or {}
-    flag = (data.get("flag") or "").strip()
+    state["phase_answers"][f"phase_{progress}"] = challenge["answer"]
 
-    valid_flags = {p["flag"]: pid for pid, p in PUZZLES.items()}
-    if flag in valid_flags:
-        already = flag in session.get("flags", [])
-        give_flag(flag)
-        return jsonify({"valid": True, "already": already, "flag": flag})
-    else:
-        return jsonify({"valid": False})
+    if challenge["vault_fragment"]:
+        state["vault_fragments"].append(challenge["vault_fragment"])
 
-# ======================================================
-# RUN
-# ======================================================
+    state["progress"] = progress + 1
+    save_state(state)
+
+    if state["progress"] > total:
+        return jsonify({
+            "success": True,
+            "message": "ACCESS GRANTED — VAULT OPENED",
+            "completed": True,
+            "vault_fragment": challenge["vault_fragment"]
+        })
+
+    return jsonify({
+        "success": True,
+        "message": "Correct — next phase unlocked.",
+        "completed": False,
+        "vault_fragment": challenge["vault_fragment"]
+    })
+
+
+@app.route("/reset", methods=["POST"])
+def reset():
+    session["game_state"] = get_initial_state()
+    return jsonify({"success": True, "message": "Game reset."})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

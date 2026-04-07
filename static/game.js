@@ -1,183 +1,346 @@
-function term(msg) {
-  const t = document.getElementById("terminal");
-  t.innerHTML += msg + "<br>";
-  t.scrollTop = t.scrollHeight;
+let currentState = null;
+
+function setMessage(type, text) {
+    const box = document.getElementById("result");
+    box.className = `message-box ${type}`;
+    box.innerText = text;
 }
 
-// Load puzzle by id
-async function loadPuzzle(id) {
-  term("Loading puzzle: " + id + " …");
+function renderHints(hints) {
+    const hintList = document.getElementById("hint-list");
+    hintList.innerHTML = "";
 
-  const res = await fetch("/api/puzzle/" + id);
-  if (!res.ok) {
-    term("[X] Failed to load puzzle.");
-    return;
-  }
-  const p = await res.json();
-  renderPuzzle(p);
-}
-
-function renderPuzzle(p) {
-  const area = document.getElementById("puzzle-area");
-
-  // 1) RSA
-  if (p.id === "hash") {
-    area.innerHTML = `
-      <h3>${p.title}</h3>
-      <pre style="white-space:pre-wrap;">${p.description}</pre>
-      <label>Enter the recovered 4-letter metal word (ANSWER, e.g. GOLD):</label>
-      <input id="answer-input" placeholder="GOLD" />
-      <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
-      <div id="result-msg" style="margin-top:6px;"></div>
-    `;
-    return;
-  }
-
-  // 2) Phishing / punycode
-  if (p.id === "phishing") {
-    area.innerHTML = `
-      <h3>${p.title}</h3>
-      <pre style="white-space:pre-wrap;">${p.email}</pre>
-      <pre style="white-space:pre-wrap;">${p.description}</pre>
-      <label>Enter your analysis (ANSWER), e.g. "homoglyph domain impersonation":</label>
-      <input id="answer-input" placeholder="homoglyph domain impersonation" />
-      <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
-      <div id="result-msg" style="margin-top:6px;"></div>
-    `;
-    return;
-  }
-
-  // 3) JS reverse engineering (6-digit PIN)
-  if (p.id === "encrypt") {
-    area.innerHTML = `
-      <h3>${p.title}</h3>
-      <p style="font-size:0.9rem;">Reverse this JavaScript to find the 6-digit PIN that validate() accepts.</p>
-      <pre style="white-space:pre-wrap; font-size:0.8rem; background:#020617; padding:6px; border-radius:4px; border:1px solid #1f2937;">
-${p.js_code}
-      </pre>
-      <pre style="white-space:pre-wrap;">${p.description}</pre>
-      <label>Enter the 6-digit PIN (ANSWER):</label>
-      <input id="answer-input" placeholder="482913" />
-      <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
-      <div id="result-msg" style="margin-top:6px;"></div>
-    `;
-    return;
-  }
-
-  // 4) PNG forensics
-  if (p.id === "logs") {
-    area.innerHTML = `
-      <h3>${p.title}</h3>
-      <pre style="white-space:pre-wrap;">${p.description}</pre>
-      <p style="font-size:0.9rem;">Corrupted PNG (Base64):</p>
-      <textarea readonly style="width:100%;height:120px;background:#020617;color:#e5e7eb;border:1px solid #1f2937;font-size:0.8rem;">${p.png_b64}</textarea>
-      <label>Enter the owner value you recover from the PNG metadata (ANSWER):</label>
-      <input id="answer-input" placeholder="night-guard-7" />
-      <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
-      <div id="result-msg" style="margin-top:6px;"></div>
-    `;
-    return;
-  }
-
-  // 5) Session prediction
-  if (p.id === "firewall") {
-    area.innerHTML = `
-      <h3>${p.title}</h3>
-      <pre style="white-space:pre-wrap;">${p.description}</pre>
-      <label>Enter the predicted admin session ID (ANSWER), e.g. sess_900050:</label>
-      <input id="answer-input" placeholder="sess_900050" />
-      <button onclick="submitAnswer('${p.id}')">Submit Answer</button>
-      <div id="result-msg" style="margin-top:6px;"></div>
-    `;
-    return;
-  }
-
-  area.innerHTML = "<p>Unknown puzzle type.</p>";
-}
-
-// Submit ANSWER to /api/submit_answer/<id>
-async function submitAnswer(id) {
-  const inputEl = document.getElementById("answer-input");
-  const val = inputEl ? inputEl.value.trim() : "";
-  if (!val) {
-    alert("Please enter an answer first.");
-    return;
-  }
-
-  const res = await fetch("/api/submit_answer/" + id, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ answer: val })
-  });
-
-  if (!res.ok) {
-    term("[X] Submission error.");
-    return;
-  }
-
-  const data = await res.json();
-  const resultDiv = document.getElementById("result-msg");
-
-  if (data.correct) {
-    const flag = data.reward_flag;
-    resultDiv.textContent = "Correct! Reward flag: " + flag + " (enter this in the Flag Console on the left).";
-    resultDiv.style.color = "#22c55e";
-    term("[✔] Correct answer for " + id + ". Reward flag: " + flag);
-  } else {
-    resultDiv.textContent = "Incorrect. Try again.";
-    resultDiv.style.color = "#f97316";
-    term("[X] Incorrect answer for " + id + ".");
-  }
-}
-
-// Submit FLAG to /api/submit_flag
-async function submitFlag() {
-  const input = document.getElementById("flag-input");
-  const val = input.value.trim();
-  if (!val) {
-    alert("Enter a flag first.");
-    return;
-  }
-
-  const res = await fetch("/api/submit_flag", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ flag: val })
-  });
-
-  if (!res.ok) {
-    term("[X] Flag submission error.");
-    return;
-  }
-
-  const data = await res.json();
-  if (data.valid) {
-    if (data.already) {
-      term("[i] Flag already registered: " + data.flag);
-      alert("Flag already registered.");
-    } else {
-      term("[✔] Flag accepted: " + data.flag);
-      alert("Flag accepted!");
-      input.value = "";
+    if (!hints || hints.length === 0) {
+        const li = document.createElement("li");
+        li.innerText = "No hints available.";
+        hintList.appendChild(li);
+        return;
     }
-  } else {
-    term("[X] Invalid flag: " + val);
-    alert("Invalid flag.");
-  }
+
+    hints.forEach((hint) => {
+        const li = document.createElement("li");
+        li.innerText = hint;
+        hintList.appendChild(li);
+    });
 }
 
-// Vault button
-async function attemptVault() {
-  term("Attempting vault unlock…");
-  const res = await fetch("/api/check_vault");
-  const data = await res.json();
+function updateProgress(progress, total) {
+    const shown = Math.min(progress, total);
+    const percent = Math.round((shown / total) * 100);
 
-  if (data.opened) {
-    term("VAULT OPENED!");
-    term("FINAL FLAG: " + data.final_flag);
-    document.getElementById("vault-status").textContent = "VAULT OPEN";
-  } else {
-    term("Vault still locked. Missing flags:");
-    (data.missing || []).forEach(f => term("- " + f));
-  }
+    document.getElementById("progress-text").innerText = `${shown} / ${total}`;
+    document.getElementById("progress-percentage").innerText = `${percent}%`;
+    document.getElementById("progress-fill").style.width = `${percent}%`;
 }
+
+function renderVaultFragments(fragments) {
+    const target = document.getElementById("vault-fragments");
+    if (!fragments || fragments.length === 0) {
+        target.innerText = "None yet";
+        return;
+    }
+    target.innerText = fragments.join(" • ");
+}
+
+function renderRecoveredEvidence(answers) {
+    const target = document.getElementById("recovered-evidence");
+    if (!answers || Object.keys(answers).length === 0) {
+        target.innerText = "No evidence recovered yet.";
+        return;
+    }
+
+    const parts = [];
+    if (answers.phase_1) parts.push(`Phase 1 password: ${answers.phase_1}`);
+    if (answers.phase_2) parts.push(`Phase 2 attacker IP: ${answers.phase_2}`);
+    if (answers.phase_3) parts.push(`Phase 3 relay token: ${answers.phase_3}`);
+    if (answers.phase_4) parts.push(`Phase 4 vault code: ${answers.phase_4}`);
+
+    target.innerHTML = parts.join("<br>");
+}
+
+function renderPhaseContent(state) {
+    const container = document.getElementById("phase-content");
+    container.innerHTML = "";
+
+    if (state.completed) {
+        container.innerHTML = `
+            <div class="brief-box">
+                <div class="brief-label">Vault Entry</div>
+                <div class="brief-text">
+                    The final vault door unlocks with a deep mechanical click. The chamber is open.
+                    You successfully completed the cyber bank heist.
+                </div>
+            </div>
+        `;
+        document.getElementById("answer-section").style.display = "none";
+        return;
+    }
+
+    document.getElementById("answer-section").style.display = "block";
+
+    if (state.progress === 1) {
+        container.innerHTML = `
+            <div class="brief-box">
+                <div class="brief-label">Leaked Credentials</div>
+                <div class="brief-text">
+                    Username: <strong>e.mercer</strong><br>
+                    Hash Type: <strong>MD5</strong><br>
+                    Hash: <strong>6f2ebf3c1f19f8c6e5953e8a0d31a59f</strong><br><br>
+                    Wordlist:<br>
+                    - welcome1<br>
+                    - banksecure<br>
+                    - winter2024<br>
+                    - vaultrunner9<br>
+                    - letmein123
+                </div>
+            </div>
+
+            <div class="answer-row" style="margin-bottom: 14px;">
+                <button class="main-btn" onclick="runCrack()">Run Crack Simulator</button>
+            </div>
+
+            <div class="brief-box">
+                <div class="brief-label">Crack Terminal</div>
+                <div class="brief-text" id="crack-terminal">Terminal idle. Run the simulator to begin.</div>
+            </div>
+        `;
+    }
+
+    if (state.progress === 2) {
+        container.innerHTML = `
+            <div class="answer-row" style="margin-bottom: 14px;">
+                <button class="main-btn" onclick="loadLogs('ALL')">All Logs</button>
+                <button class="main-btn" onclick="loadLogs('FAILED')">Failed Logins</button>
+                <button class="main-btn" onclick="loadLogs('SUCCESS')">Successful Logins</button>
+            </div>
+
+            <div class="brief-box">
+                <div class="brief-label">Authentication Logs</div>
+                <div class="brief-text" id="log-viewer">Loading logs...</div>
+            </div>
+        `;
+        loadLogs("ALL");
+    }
+
+    if (state.progress === 3) {
+        container.innerHTML = `
+            <div class="brief-box">
+                <div class="brief-label">Captured Encoded Message</div>
+                <div class="brief-text">
+                    VmF1bHQgcmVsYXkgdG9rZW46IE5JR0hUR0xBU1M=
+                </div>
+            </div>
+
+            <div class="answer-row" style="margin-bottom: 14px;">
+                <button class="main-btn" onclick="decodeMessage()">Run Decoder</button>
+            </div>
+
+            <div class="brief-box">
+                <div class="brief-label">Decoder Output</div>
+                <div class="brief-text" id="decoder-output">Decoder idle. Run the decoder to reveal the message.</div>
+            </div>
+        `;
+    }
+
+    if (state.progress === 4) {
+        container.innerHTML = `
+            <div class="brief-box">
+                <div class="brief-label">Vault Assembly Rules</div>
+                <div class="brief-text">
+                    Build the final vault code using:
+                    <br>1. The three recovered vault fragments in phase order
+                    <br>2. The length of the cracked password from Phase 1
+                    <br><br>
+                    Example format: [fragments][password length]
+                </div>
+            </div>
+
+            <div class="brief-box">
+                <div class="brief-label">Evidence Summary</div>
+                <div class="brief-text">
+                    Cracked Password: <strong>${state.phase_answers.phase_1 || "Not found"}</strong><br>
+                    Attacker IP: <strong>${state.phase_answers.phase_2 || "Not found"}</strong><br>
+                    Relay Token: <strong>${state.phase_answers.phase_3 || "Not found"}</strong><br>
+                    Vault Fragments: <strong>${(state.vault_fragments || []).join(" • ") || "None"}</strong>
+                </div>
+            </div>
+        `;
+    }
+}
+
+function loadGameState() {
+    fetch("/get_game_state")
+        .then(response => response.json())
+        .then(data => {
+            currentState = data;
+
+            updateProgress(data.progress, data.total);
+            document.getElementById("challenge-title").innerText = data.title;
+            document.getElementById("challenge-desc").innerText = data.description;
+            document.getElementById("objective-text").innerText = data.objective;
+            document.getElementById("task-brief").innerText = data.task_brief;
+            document.getElementById("answer-label").innerText = data.answer_label || "";
+            document.getElementById("status-pill").innerText = data.completed ? "Vault Opened" : `Phase ${data.progress} Active`;
+
+            renderHints(data.hints);
+            renderVaultFragments(data.vault_fragments);
+            renderRecoveredEvidence(data.phase_answers);
+            renderPhaseContent(data);
+
+            if (data.completed) {
+                setMessage("success", "HEIST COMPLETE — VAULT ENTERED");
+            } else {
+                document.getElementById("answer-input").disabled = false;
+                setMessage("neutral", "Awaiting answer...");
+            }
+        })
+        .catch(() => {
+            setMessage("error", "Failed to load challenge data.");
+        });
+}
+
+function runCrack() {
+    fetch("/run_crack", {
+        method: "POST"
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                setMessage("error", data.message);
+                return;
+            }
+
+            const terminal = document.getElementById("crack-terminal");
+            terminal.innerHTML = "";
+
+            let index = 0;
+            const lines = data.lines;
+
+            const timer = setInterval(() => {
+                if (index >= lines.length) {
+                    clearInterval(timer);
+                    setMessage("success", "Password recovered. Submit it to continue.");
+                    return;
+                }
+
+                terminal.innerHTML += `${lines[index]}<br>`;
+                index++;
+            }, 500);
+        })
+        .catch(() => {
+            setMessage("error", "Crack simulator failed.");
+        });
+}
+
+function loadLogs(filterType) {
+    fetch(`/get_logs?filter=${filterType}`)
+        .then(response => response.json())
+        .then(data => {
+            const viewer = document.getElementById("log-viewer");
+
+            if (!data.success) {
+                viewer.innerText = "Unable to load logs.";
+                return;
+            }
+
+            if (!data.rows || data.rows.length === 0) {
+                viewer.innerText = "No logs found.";
+                return;
+            }
+
+            let html = `
+                <table style="width:100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left; padding:8px;">Time</th>
+                            <th style="text-align:left; padding:8px;">User</th>
+                            <th style="text-align:left; padding:8px;">IP</th>
+                            <th style="text-align:left; padding:8px;">Event</th>
+                            <th style="text-align:left; padding:8px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            data.rows.forEach(row => {
+                html += `
+                    <tr>
+                        <td style="padding:8px;">${row.time}</td>
+                        <td style="padding:8px;">${row.user}</td>
+                        <td style="padding:8px;">${row.ip}</td>
+                        <td style="padding:8px;">${row.event}</td>
+                        <td style="padding:8px;">${row.status}</td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            viewer.innerHTML = html;
+        })
+        .catch(() => {
+            const viewer = document.getElementById("log-viewer");
+            if (viewer) viewer.innerText = "Failed to load logs.";
+        });
+}
+
+function decodeMessage() {
+    fetch("/decode_message", {
+        method: "POST"
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                setMessage("error", data.message);
+                return;
+            }
+
+            const output = document.getElementById("decoder-output");
+            output.innerHTML = `
+                Encoded: <strong>${data.encoded}</strong><br><br>
+                Decoded: <strong>${data.decoded}</strong>
+            `;
+
+            setMessage("success", "Message decoded. Extract the relay token and submit it.");
+        })
+        .catch(() => {
+            setMessage("error", "Decoder failed.");
+        });
+}
+
+function submitAnswer() {
+    const input = document.getElementById("answer-input");
+    const answer = input.value.trim();
+
+    if (!answer) {
+        setMessage("error", "Enter an answer before submitting.");
+        return;
+    }
+
+    fetch("/submit_answer", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ answer: answer })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                input.value = "";
+                setMessage("success", data.message);
+
+                setTimeout(() => {
+                    loadGameState();
+                }, 700);
+            } else {
+                setMessage("error", data.message);
+            }
+        })
+        .catch(() => {
+            setMessage("error", "Submission failed.");
+        });
+}
+
+window.onload = function () {
+    loadGameState();
+};
