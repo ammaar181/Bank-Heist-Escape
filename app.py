@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, session
 import os
 import base64
+import hashlib
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -17,10 +18,14 @@ app.secret_key = "supersecretkey"
 def get_initial_state():
     return {
         "progress": 1,
-        "crack_completed": False,
-        "decode_completed": False,
         "vault_fragments": [],
-        "phase_answers": {}
+        "phase_answers": {},
+        "phase1_tested_candidates": [],
+        "phase1_match_found": False,
+        "phase2_selected_rows": [],
+        "phase2_analysis_unlocked": False,
+        "phase3_decode_attempts": [],
+        "phase3_correct_method_found": False
     }
 
 
@@ -35,106 +40,113 @@ def save_state(state):
     session.modified = True
 
 
+PHASE1 = {
+    "username": "e.mercer",
+    "hash_type": "MD5",
+    "password": "vaultrunner9",
+    "hash": hashlib.md5("vaultrunner9".encode()).hexdigest(),
+    "candidates": [
+        "welcome1",
+        "banksecure",
+        "winter2024",
+        "VaultRunner9",
+        "vaultrunner9",
+        "letmein123"
+    ]
+}
+
+PHASE2_LOG_ROWS = [
+    {"id": 1, "time": "01:11:03", "user": "svc.backup", "ip": "10.0.4.12", "event": "LOGIN_SUCCESS", "status": "Normal"},
+    {"id": 2, "time": "01:13:42", "user": "r.turner", "ip": "10.0.5.33", "event": "LOGIN_SUCCESS", "status": "Normal"},
+    {"id": 3, "time": "02:44:11", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
+    {"id": 4, "time": "02:44:16", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
+    {"id": 5, "time": "02:44:21", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
+    {"id": 6, "time": "02:44:29", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_SUCCESS", "status": "Critical"},
+    {"id": 7, "time": "02:50:04", "user": "j.finch", "ip": "172.16.2.44", "event": "LOGIN_FAILED", "status": "Normal"},
+    {"id": 8, "time": "03:01:08", "user": "svc.payroll", "ip": "10.0.8.44", "event": "LOGIN_SUCCESS", "status": "Normal"},
+    {"id": 9, "time": "03:09:51", "user": "j.finch", "ip": "10.0.6.21", "event": "LOGIN_FAILED", "status": "Normal"}
+]
+
+PHASE2_CORRECT_ROW_IDS = [3, 4, 5, 6]
+PHASE2_CORRECT_IP = "185.217.92.14"
+PHASE2_CORRECT_USER = "a.hayes"
+
+PHASE3_ENCODED = base64.b64encode(
+    b"Relay archive note: secondary transfer authorised. vault relay token = NIGHTGLASS. destroy after reading."
+).decode("utf-8")
+PHASE3_CORRECT_METHOD = "base64"
+PHASE3_TOKEN = "nightglass"
+
 CHALLENGES = {
     1: {
         "title": "Phase 1: Password Cracking",
-        "description": "A bank employee reused a weak password. Crack the leaked hash using the wordlist simulator.",
+        "description": "A leaked employee hash has been recovered. Test candidate passwords against the hash and find the real credential.",
         "objective": "Recover the employee password.",
         "task_brief": (
-            "Use the crack simulator to test the leaked wordlist against the employee hash. "
-            "Once the password is revealed, submit it to unlock the next layer."
+            "You are not being handed the answer. Use the candidate tester to compare password guesses against the leaked hash. "
+            "Only one candidate is a valid match."
         ),
         "answer": "vaultrunner9",
         "answer_label": "Enter the cracked password",
         "vault_fragment": "7",
         "hints": [
-            "You need to run the crack first.",
-            "The answer is not shown until a password match is found.",
-            "Watch the terminal output carefully."
+            "One candidate has the exact MD5 hash match.",
+            "Case matters when hashing.",
+            "A near-match is included to catch lazy players."
         ]
     },
     2: {
         "title": "Phase 2: Log Analysis",
-        "description": "Security logs show one hostile source probing the bank systems before gaining access.",
-        "objective": "Identify the suspicious attacker IP address.",
+        "description": "Authentication logs show one real intrusion sequence hidden among normal traffic and harmless failures.",
+        "objective": "Identify the attacker IP and compromised user.",
         "task_brief": (
-            "Inspect the authentication logs. Look for repeated failed login attempts followed by a successful breach. "
-            "Submit the suspicious IP address."
+            "Select the suspicious log rows that form the breach pattern: repeated failed attempts followed by a successful login on the same account. "
+            "Then submit both the attacker IP and compromised username."
         ),
-        "answer": "185.217.92.14",
-        "answer_label": "Enter the suspicious IP",
+        "answer": f"{PHASE2_CORRECT_IP}|{PHASE2_CORRECT_USER}",
+        "answer_label": "Enter answer as: IP|username",
         "vault_fragment": "3",
         "hints": [
-            "Look for a burst of failures before one success.",
-            "The attacker IP is not internal bank traffic.",
-            "One external address stands out clearly."
+            "The key pattern is repeated failure followed by success.",
+            "The attacker is external, not internal bank traffic.",
+            "You need both the IP and the username."
         ]
     },
     3: {
         "title": "Phase 3: Encoded Internal Message",
-        "description": "An intercepted internal relay message contains the next access clue, but it is encoded.",
-        "objective": "Decode the hidden relay token.",
+        "description": "An intercepted internal relay note is encoded. Choose the correct decoder and extract the relay token.",
+        "objective": "Recover the relay token.",
         "task_brief": (
-            "Use the in-game decoder on the captured message. Extract the relay token from the decoded text "
-            "and submit it as your answer."
+            "Test decode methods until the output becomes readable English. "
+            "Once decoded, extract the token from the message and submit it."
         ),
         "answer": "nightglass",
-        "answer_label": "Enter the decoded relay token",
+        "answer_label": "Enter the relay token",
         "vault_fragment": "9",
         "hints": [
-            "This is encoding, not encryption.",
-            "Run the decoder first.",
-            "The token appears in readable English after decoding."
+            "This is a common text-safe encoding method.",
+            "Wrong decode methods should produce useless output.",
+            "The answer is a token inside the decoded sentence, not the whole sentence."
         ]
     },
     4: {
         "title": "Phase 4: Final Vault Access",
-        "description": "You have reached the core vault terminal. Reassemble the final access code using evidence recovered earlier.",
-        "objective": "Construct the final vault code.",
+        "description": "Use the evidence gathered so far to construct the final vault code.",
+        "objective": "Build the final vault code.",
         "task_brief": (
-            "Use the three recovered vault fragments in phase order, then append the length of the cracked password "
-            "from Phase 1. Submit the final vault code."
+            "Take the three vault fragments in phase order, then append the length of the cracked password from Phase 1. "
+            "Submit the combined code."
         ),
         "answer": "73912",
         "answer_label": "Enter the final vault code",
         "vault_fragment": None,
         "hints": [
-            "You already collected everything you need.",
-            "Fragments come first, in phase order.",
-            "Then append the Phase 1 cracked password length."
+            "The three fragments come first.",
+            "Use phase order.",
+            "Then append the Phase 1 password length."
         ]
     }
 }
-
-
-CRACK_SIM = {
-    "username": "e.mercer",
-    "hash_type": "MD5",
-    "hash": "6f2ebf3c1f19f8c6e5953e8a0d31a59f",
-    "wordlist": [
-        "welcome1",
-        "banksecure",
-        "winter2024",
-        "vaultrunner9",
-        "letmein123"
-    ],
-    "correct_password": "vaultrunner9"
-}
-
-LOG_ROWS = [
-    {"time": "01:11:03", "user": "svc.backup", "ip": "10.0.4.12", "event": "LOGIN_SUCCESS", "status": "Normal"},
-    {"time": "01:13:42", "user": "r.turner", "ip": "10.0.5.33", "event": "LOGIN_SUCCESS", "status": "Normal"},
-    {"time": "02:44:11", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
-    {"time": "02:44:16", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
-    {"time": "02:44:21", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_FAILED", "status": "Suspicious"},
-    {"time": "02:44:29", "user": "a.hayes", "ip": "185.217.92.14", "event": "LOGIN_SUCCESS", "status": "Critical"},
-    {"time": "03:01:08", "user": "svc.payroll", "ip": "10.0.8.44", "event": "LOGIN_SUCCESS", "status": "Normal"},
-    {"time": "03:09:51", "user": "j.finch", "ip": "10.0.6.21", "event": "LOGIN_FAILED", "status": "Normal"}
-]
-
-ENCODED_TEXT = base64.b64encode(
-    b"Vault relay token: NIGHTGLASS"
-).decode("utf-8")
 
 
 @app.route("/")
@@ -161,16 +173,34 @@ def get_game_state():
             "progress": total,
             "total": total,
             "title": "Vault Entered",
-            "description": "The final vault door slides open. The bank reserves are exposed.",
+            "description": "The final vault door unlocks and the chamber opens.",
             "objective": "Operation Complete",
-            "task_brief": "You completed all four phases and breached the vault.",
+            "task_brief": "All four phases were completed successfully.",
             "answer_label": "",
             "hints": [
-                "Inside Man: Clean job. Grab what you came for and get out.",
-                "All security layers have been bypassed."
+                "Inside Man: Clean breach. Grab the reserves and disappear.",
+                "All security layers bypassed."
             ],
             "vault_fragments": state["vault_fragments"],
-            "phase_answers": state["phase_answers"]
+            "phase_answers": state["phase_answers"],
+            "phase1": {
+                "username": PHASE1["username"],
+                "hash_type": PHASE1["hash_type"],
+                "hash": PHASE1["hash"],
+                "candidates": PHASE1["candidates"],
+                "tested_candidates": state["phase1_tested_candidates"],
+                "match_found": state["phase1_match_found"]
+            },
+            "phase2": {
+                "rows": PHASE2_LOG_ROWS,
+                "selected_rows": state["phase2_selected_rows"],
+                "analysis_unlocked": state["phase2_analysis_unlocked"]
+            },
+            "phase3": {
+                "encoded": PHASE3_ENCODED,
+                "decode_attempts": state["phase3_decode_attempts"],
+                "correct_method_found": state["phase3_correct_method_found"]
+            }
         })
 
     challenge = CHALLENGES[progress]
@@ -187,71 +217,127 @@ def get_game_state():
         "hints": challenge["hints"],
         "vault_fragments": state["vault_fragments"],
         "phase_answers": state["phase_answers"],
-        "crack_completed": state["crack_completed"],
-        "decode_completed": state["decode_completed"]
+        "phase1": {
+            "username": PHASE1["username"],
+            "hash_type": PHASE1["hash_type"],
+            "hash": PHASE1["hash"],
+            "candidates": PHASE1["candidates"],
+            "tested_candidates": state["phase1_tested_candidates"],
+            "match_found": state["phase1_match_found"]
+        },
+        "phase2": {
+            "rows": PHASE2_LOG_ROWS,
+            "selected_rows": state["phase2_selected_rows"],
+            "analysis_unlocked": state["phase2_analysis_unlocked"]
+        },
+        "phase3": {
+            "encoded": PHASE3_ENCODED,
+            "decode_attempts": state["phase3_decode_attempts"],
+            "correct_method_found": state["phase3_correct_method_found"]
+        }
     })
 
 
-@app.route("/run_crack", methods=["POST"])
-def run_crack():
+@app.route("/phase1_test_candidate", methods=["POST"])
+def phase1_test_candidate():
     state = get_state()
 
     if state["progress"] != 1:
-        return jsonify({"success": False, "message": "Password cracking is not active right now."})
+        return jsonify({"success": False, "message": "Phase 1 is not active."})
 
-    state["crack_completed"] = True
+    data = request.get_json(silent=True) or {}
+    candidate = str(data.get("candidate", "")).strip()
+
+    if not candidate:
+        return jsonify({"success": False, "message": "No candidate provided."})
+
+    candidate_hash = hashlib.md5(candidate.encode()).hexdigest()
+    is_match = candidate_hash == PHASE1["hash"]
+
+    if candidate not in state["phase1_tested_candidates"]:
+        state["phase1_tested_candidates"].append(candidate)
+
+    if is_match:
+        state["phase1_match_found"] = True
+
     save_state(state)
-
-    lines = [f"[*] Starting crack for user: {CRACK_SIM['username']}"]
-    for word in CRACK_SIM["wordlist"]:
-        if word == CRACK_SIM["correct_password"]:
-            lines.append(f"[+] trying: {word}")
-            lines.append(f"[MATCH FOUND] password = {word}")
-            break
-        lines.append(f"[-] trying: {word}")
 
     return jsonify({
         "success": True,
-        "lines": lines,
-        "password": CRACK_SIM["correct_password"]
+        "candidate": candidate,
+        "candidate_hash": candidate_hash,
+        "is_match": is_match,
+        "message": "Hash match found." if is_match else "No match."
     })
 
 
-@app.route("/get_logs")
-def get_logs():
+@app.route("/phase2_toggle_row", methods=["POST"])
+def phase2_toggle_row():
     state = get_state()
 
     if state["progress"] != 2:
-        return jsonify({"success": False, "rows": []})
+        return jsonify({"success": False, "message": "Phase 2 is not active."})
 
-    event_filter = request.args.get("filter", "ALL").upper()
+    data = request.get_json(silent=True) or {}
+    row_id = data.get("row_id")
 
-    if event_filter == "FAILED":
-        rows = [r for r in LOG_ROWS if r["event"] == "LOGIN_FAILED"]
-    elif event_filter == "SUCCESS":
-        rows = [r for r in LOG_ROWS if r["event"] == "LOGIN_SUCCESS"]
+    if not isinstance(row_id, int):
+        return jsonify({"success": False, "message": "Invalid row id."})
+
+    selected = state["phase2_selected_rows"]
+
+    if row_id in selected:
+        selected.remove(row_id)
     else:
-        rows = LOG_ROWS
+        selected.append(row_id)
 
-    return jsonify({"success": True, "rows": rows})
+    selected.sort()
 
-
-@app.route("/decode_message", methods=["POST"])
-def decode_message():
-    state = get_state()
-
-    if state["progress"] != 3:
-        return jsonify({"success": False, "message": "Decoder is not active right now."})
-
-    state["decode_completed"] = True
+    state["phase2_analysis_unlocked"] = selected == PHASE2_CORRECT_ROW_IDS
     save_state(state)
-
-    decoded = base64.b64decode(ENCODED_TEXT.encode("utf-8")).decode("utf-8")
 
     return jsonify({
         "success": True,
-        "encoded": ENCODED_TEXT,
-        "decoded": decoded
+        "selected_rows": selected,
+        "analysis_unlocked": state["phase2_analysis_unlocked"],
+        "message": "Correct intrusion pattern identified." if state["phase2_analysis_unlocked"] else "Selection updated."
+    })
+
+
+@app.route("/phase3_decode", methods=["POST"])
+def phase3_decode():
+    state = get_state()
+
+    if state["progress"] != 3:
+        return jsonify({"success": False, "message": "Phase 3 is not active."})
+
+    data = request.get_json(silent=True) or {}
+    method = str(data.get("method", "")).strip().lower()
+
+    output = ""
+
+    if method == "base64":
+        output = base64.b64decode(PHASE3_ENCODED.encode()).decode()
+        state["phase3_correct_method_found"] = True
+    elif method == "hex":
+        output = "5661756c742072656c617920746f6b656e3f3f3f20496e76616c6964207061796c6f6164"
+    elif method == "rot13":
+        output = "IzSn1ODtpezLtqT9VRAWE0uHE0KOHF="
+    else:
+        output = "Decoder error: unsupported method."
+
+    state["phase3_decode_attempts"].append({
+        "method": method,
+        "output": output
+    })
+
+    save_state(state)
+
+    return jsonify({
+        "success": True,
+        "method": method,
+        "output": output,
+        "correct_method_found": state["phase3_correct_method_found"]
     })
 
 
@@ -266,21 +352,27 @@ def submit_answer():
 
     data = request.get_json(silent=True) or {}
     answer = str(data.get("answer", "")).strip().lower()
-
     challenge = CHALLENGES[progress]
     correct = challenge["answer"].strip().lower()
 
-    if progress == 1 and not state["crack_completed"]:
+    if progress == 1 and not state["phase1_match_found"]:
         return jsonify({
             "success": False,
-            "message": "Run the crack simulator before submitting an answer.",
+            "message": "You have not found a valid password match yet.",
             "completed": False
         })
 
-    if progress == 3 and not state["decode_completed"]:
+    if progress == 2 and not state["phase2_analysis_unlocked"]:
         return jsonify({
             "success": False,
-            "message": "Run the decoder before submitting an answer.",
+            "message": "You must first identify the full intrusion pattern in the logs.",
+            "completed": False
+        })
+
+    if progress == 3 and not state["phase3_correct_method_found"]:
+        return jsonify({
+            "success": False,
+            "message": "You have not decoded the message correctly yet.",
             "completed": False
         })
 
@@ -303,15 +395,13 @@ def submit_answer():
         return jsonify({
             "success": True,
             "message": "ACCESS GRANTED — VAULT OPENED",
-            "completed": True,
-            "vault_fragment": challenge["vault_fragment"]
+            "completed": True
         })
 
     return jsonify({
         "success": True,
         "message": "Correct — next phase unlocked.",
-        "completed": False,
-        "vault_fragment": challenge["vault_fragment"]
+        "completed": False
     })
 
 

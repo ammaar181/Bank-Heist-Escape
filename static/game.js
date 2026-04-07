@@ -51,27 +51,171 @@ function renderRecoveredEvidence(answers) {
 
     const parts = [];
     if (answers.phase_1) parts.push(`Phase 1 password: ${answers.phase_1}`);
-    if (answers.phase_2) parts.push(`Phase 2 attacker IP: ${answers.phase_2}`);
+    if (answers.phase_2) parts.push(`Phase 2 intrusion: ${answers.phase_2}`);
     if (answers.phase_3) parts.push(`Phase 3 relay token: ${answers.phase_3}`);
     if (answers.phase_4) parts.push(`Phase 4 vault code: ${answers.phase_4}`);
 
     target.innerHTML = parts.join("<br>");
 }
 
+function renderPhase1(state) {
+    const tested = state.phase1.tested_candidates || [];
+    const testedHtml = tested.length
+        ? tested.map(c => `<div>${c}</div>`).join("")
+        : "No candidates tested yet.";
+
+    return `
+        <div class="brief-box">
+            <div class="brief-label">Leaked Credentials</div>
+            <div class="brief-text">
+                Username: <strong>${state.phase1.username}</strong><br>
+                Hash Type: <strong>${state.phase1.hash_type}</strong><br>
+                Hash: <strong>${state.phase1.hash}</strong>
+            </div>
+        </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Candidate Wordlist</div>
+            <div class="brief-text">
+                ${state.phase1.candidates.map(candidate => `
+                    <button class="main-btn" style="margin: 4px;" onclick="testCandidate('${candidate}')">${candidate}</button>
+                `).join("")}
+            </div>
+        </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Tested Candidates</div>
+            <div class="brief-text">${testedHtml}</div>
+        </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Hash Test Output</div>
+            <div class="brief-text" id="phase1-output">
+                ${state.phase1.match_found ? "A valid hash match has been found. Submit the cracked password." : "Test candidate passwords against the leaked hash."}
+            </div>
+        </div>
+    `;
+}
+
+function renderPhase2(state) {
+    const rows = state.phase2.rows || [];
+    const selected = state.phase2.selected_rows || [];
+
+    const tableRows = rows.map(row => {
+        const isSelected = selected.includes(row.id);
+        return `
+            <tr onclick="toggleLogRow(${row.id})" style="cursor:pointer; background:${isSelected ? 'rgba(0,240,168,0.12)' : 'transparent'};">
+                <td style="padding:8px;">${isSelected ? "✓" : ""}</td>
+                <td style="padding:8px;">${row.time}</td>
+                <td style="padding:8px;">${row.user}</td>
+                <td style="padding:8px;">${row.ip}</td>
+                <td style="padding:8px;">${row.event}</td>
+                <td style="padding:8px;">${row.status}</td>
+            </tr>
+        `;
+    }).join("");
+
+    return `
+        <div class="brief-box">
+            <div class="brief-label">Authentication Logs</div>
+            <div class="brief-text">
+                Click rows to mark the suspicious intrusion sequence.
+                ${state.phase2.analysis_unlocked ? "<br><br><strong>Correct breach pattern identified. You may now submit IP|username.</strong>" : ""}
+            </div>
+            <div style="overflow-x:auto; margin-top:12px;">
+                <table style="width:100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left; padding:8px;">Sel</th>
+                            <th style="text-align:left; padding:8px;">Time</th>
+                            <th style="text-align:left; padding:8px;">User</th>
+                            <th style="text-align:left; padding:8px;">IP</th>
+                            <th style="text-align:left; padding:8px;">Event</th>
+                            <th style="text-align:left; padding:8px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+function renderPhase3(state) {
+    const attempts = state.phase3.decode_attempts || [];
+    const attemptsHtml = attempts.length
+        ? attempts.map(a => `<div><strong>${a.method}</strong>: ${a.output}</div><br>`).join("")
+        : "No decode attempts yet.";
+
+    return `
+        <div class="brief-box">
+            <div class="brief-label">Captured Message</div>
+            <div class="brief-text">${state.phase3.encoded}</div>
+        </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Decode Methods</div>
+            <div class="brief-text">
+                <button class="main-btn" style="margin:4px;" onclick="decodeWithMethod('base64')">Base64</button>
+                <button class="main-btn" style="margin:4px;" onclick="decodeWithMethod('hex')">Hex</button>
+                <button class="main-btn" style="margin:4px;" onclick="decodeWithMethod('rot13')">ROT13</button>
+            </div>
+        </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Decoder Output</div>
+            <div class="brief-text" id="phase3-output">
+                ${attemptsHtml}
+                ${state.phase3.correct_method_found ? "<strong>Correct decode method found. Extract the token and submit it.</strong>" : ""}
+            </div>
+        </div>
+    `;
+}
+
+function renderPhase4(state) {
+    const password = state.phase_answers.phase_1 || "";
+    const passwordLength = password.length;
+
+    return `
+        <div class="brief-box">
+            <div class="brief-label">Vault Assembly Rules</div>
+            <div class="brief-text">
+                Build the final code using:
+                <br>1. The three recovered vault fragments in phase order
+                <br>2. The length of the cracked password from Phase 1
+            </div>
+        </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Recovered Evidence</div>
+            <div class="brief-text">
+                Phase 1 password: <strong>${state.phase_answers.phase_1 || "Not found"}</strong><br>
+                Phase 1 password length: <strong>${passwordLength || "Unknown"}</strong><br>
+                Phase 2 intrusion: <strong>${state.phase_answers.phase_2 || "Not found"}</strong><br>
+                Phase 3 relay token: <strong>${state.phase_answers.phase_3 || "Not found"}</strong><br>
+                Vault fragments: <strong>${(state.vault_fragments || []).join(" • ") || "None"}</strong>
+            </div>
+        </div>
+    `;
+}
+
+function renderCompleted() {
+    return `
+        <div class="brief-box">
+            <div class="brief-label">Vault Entry</div>
+            <div class="brief-text">
+                The final vault door unlocks with a deep mechanical click. The chamber is open.
+                You successfully completed the cyber bank heist.
+            </div>
+        </div>
+    `;
+}
+
 function renderPhaseContent(state) {
     const container = document.getElementById("phase-content");
-    container.innerHTML = "";
 
     if (state.completed) {
-        container.innerHTML = `
-            <div class="brief-box">
-                <div class="brief-label">Vault Entry</div>
-                <div class="brief-text">
-                    The final vault door unlocks with a deep mechanical click. The chamber is open.
-                    You successfully completed the cyber bank heist.
-                </div>
-            </div>
-        `;
+        container.innerHTML = renderCompleted();
         document.getElementById("answer-section").style.display = "none";
         return;
     }
@@ -79,92 +223,13 @@ function renderPhaseContent(state) {
     document.getElementById("answer-section").style.display = "block";
 
     if (state.progress === 1) {
-        container.innerHTML = `
-            <div class="brief-box">
-                <div class="brief-label">Leaked Credentials</div>
-                <div class="brief-text">
-                    Username: <strong>e.mercer</strong><br>
-                    Hash Type: <strong>MD5</strong><br>
-                    Hash: <strong>6f2ebf3c1f19f8c6e5953e8a0d31a59f</strong><br><br>
-                    Wordlist:<br>
-                    - welcome1<br>
-                    - banksecure<br>
-                    - winter2024<br>
-                    - vaultrunner9<br>
-                    - letmein123
-                </div>
-            </div>
-
-            <div class="answer-row" style="margin-bottom: 14px;">
-                <button class="main-btn" onclick="runCrack()">Run Crack Simulator</button>
-            </div>
-
-            <div class="brief-box">
-                <div class="brief-label">Crack Terminal</div>
-                <div class="brief-text" id="crack-terminal">Terminal idle. Run the simulator to begin.</div>
-            </div>
-        `;
-    }
-
-    if (state.progress === 2) {
-        container.innerHTML = `
-            <div class="answer-row" style="margin-bottom: 14px;">
-                <button class="main-btn" onclick="loadLogs('ALL')">All Logs</button>
-                <button class="main-btn" onclick="loadLogs('FAILED')">Failed Logins</button>
-                <button class="main-btn" onclick="loadLogs('SUCCESS')">Successful Logins</button>
-            </div>
-
-            <div class="brief-box">
-                <div class="brief-label">Authentication Logs</div>
-                <div class="brief-text" id="log-viewer">Loading logs...</div>
-            </div>
-        `;
-        loadLogs("ALL");
-    }
-
-    if (state.progress === 3) {
-        container.innerHTML = `
-            <div class="brief-box">
-                <div class="brief-label">Captured Encoded Message</div>
-                <div class="brief-text">
-                    VmF1bHQgcmVsYXkgdG9rZW46IE5JR0hUR0xBU1M=
-                </div>
-            </div>
-
-            <div class="answer-row" style="margin-bottom: 14px;">
-                <button class="main-btn" onclick="decodeMessage()">Run Decoder</button>
-            </div>
-
-            <div class="brief-box">
-                <div class="brief-label">Decoder Output</div>
-                <div class="brief-text" id="decoder-output">Decoder idle. Run the decoder to reveal the message.</div>
-            </div>
-        `;
-    }
-
-    if (state.progress === 4) {
-        container.innerHTML = `
-            <div class="brief-box">
-                <div class="brief-label">Vault Assembly Rules</div>
-                <div class="brief-text">
-                    Build the final vault code using:
-                    <br>1. The three recovered vault fragments in phase order
-                    <br>2. The length of the cracked password from Phase 1
-                    <br><br>
-                    Example format: [fragments][password length]
-                </div>
-            </div>
-
-            <div class="brief-box">
-                <div class="brief-label">Evidence Summary</div>
-                <div class="brief-text">
-                    Cracked Password: <strong>${state.phase_answers.phase_1 || "Not found"}</strong><br>
-                    Attacker IP: <strong>${state.phase_answers.phase_2 || "Not found"}</strong><br>
-                    Relay Token: <strong>${state.phase_answers.phase_3 || "Not found"}</strong><br>
-                    Vault Fragments: <strong>${(state.vault_fragments || []).join(" • ") || "None"}</strong>
-                </div>
-            </div>
-        `;
+        container.innerHTML = renderPhase1(state);
+    } else if (state.progress === 2) {
+        container.innerHTML = renderPhase2(state);
+    } else if (state.progress === 3) {
+        container.innerHTML = renderPhase3(state);
+    } else if (state.progress === 4) {
+        container.innerHTML = renderPhase4(state);
     }
 }
 
@@ -199,9 +264,13 @@ function loadGameState() {
         });
 }
 
-function runCrack() {
-    fetch("/run_crack", {
-        method: "POST"
+function testCandidate(candidate) {
+    fetch("/phase1_test_candidate", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ candidate: candidate })
     })
         .then(response => response.json())
         .then(data => {
@@ -210,97 +279,79 @@ function runCrack() {
                 return;
             }
 
-            const terminal = document.getElementById("crack-terminal");
-            terminal.innerHTML = "";
-
-            let index = 0;
-            const lines = data.lines;
-
-            const timer = setInterval(() => {
-                if (index >= lines.length) {
-                    clearInterval(timer);
-                    setMessage("success", "Password recovered. Submit it to continue.");
-                    return;
-                }
-
-                terminal.innerHTML += `${lines[index]}<br>`;
-                index++;
-            }, 500);
-        })
-        .catch(() => {
-            setMessage("error", "Crack simulator failed.");
-        });
-}
-
-function loadLogs(filterType) {
-    fetch(`/get_logs?filter=${filterType}`)
-        .then(response => response.json())
-        .then(data => {
-            const viewer = document.getElementById("log-viewer");
-
-            if (!data.success) {
-                viewer.innerText = "Unable to load logs.";
-                return;
-            }
-
-            if (!data.rows || data.rows.length === 0) {
-                viewer.innerText = "No logs found.";
-                return;
-            }
-
-            let html = `
-                <table style="width:100%; border-collapse: collapse;">
-                    <thead>
-                        <tr>
-                            <th style="text-align:left; padding:8px;">Time</th>
-                            <th style="text-align:left; padding:8px;">User</th>
-                            <th style="text-align:left; padding:8px;">IP</th>
-                            <th style="text-align:left; padding:8px;">Event</th>
-                            <th style="text-align:left; padding:8px;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            data.rows.forEach(row => {
-                html += `
-                    <tr>
-                        <td style="padding:8px;">${row.time}</td>
-                        <td style="padding:8px;">${row.user}</td>
-                        <td style="padding:8px;">${row.ip}</td>
-                        <td style="padding:8px;">${row.event}</td>
-                        <td style="padding:8px;">${row.status}</td>
-                    </tr>
-                `;
-            });
-
-            html += `</tbody></table>`;
-            viewer.innerHTML = html;
-        })
-        .catch(() => {
-            const viewer = document.getElementById("log-viewer");
-            if (viewer) viewer.innerText = "Failed to load logs.";
-        });
-}
-
-function decodeMessage() {
-    fetch("/decode_message", {
-        method: "POST"
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (!data.success) {
-                setMessage("error", data.message);
-                return;
-            }
-
-            const output = document.getElementById("decoder-output");
+            const output = document.getElementById("phase1-output");
             output.innerHTML = `
-                Encoded: <strong>${data.encoded}</strong><br><br>
-                Decoded: <strong>${data.decoded}</strong>
+                Candidate: <strong>${data.candidate}</strong><br>
+                MD5: <strong>${data.candidate_hash}</strong><br>
+                Result: <strong>${data.message}</strong>
             `;
 
-            setMessage("success", "Message decoded. Extract the relay token and submit it.");
+            if (data.is_match) {
+                setMessage("success", "Correct candidate found. Now submit the cracked password.");
+            } else {
+                setMessage("neutral", "No match. Test another candidate.");
+            }
+
+            setTimeout(loadGameState, 250);
+        })
+        .catch(() => {
+            setMessage("error", "Candidate test failed.");
+        });
+}
+
+function toggleLogRow(rowId) {
+    fetch("/phase2_toggle_row", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ row_id: rowId })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                setMessage("error", data.message);
+                return;
+            }
+
+            if (data.analysis_unlocked) {
+                setMessage("success", "Correct intrusion pattern identified. Submit IP|username.");
+            } else {
+                setMessage("neutral", "Log selection updated.");
+            }
+
+            loadGameState();
+        })
+        .catch(() => {
+            setMessage("error", "Failed to update log selection.");
+        });
+}
+
+function decodeWithMethod(method) {
+    fetch("/phase3_decode", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ method: method })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                setMessage("error", data.message);
+                return;
+            }
+
+            const output = document.getElementById("phase3-output");
+            output.innerHTML += `<div><strong>${data.method}</strong>: ${data.output}</div><br>`;
+
+            if (data.correct_method_found) {
+                setMessage("success", "Correct decode method found. Extract the token and submit it.");
+            } else {
+                setMessage("neutral", "Wrong method. Try another decoder.");
+            }
+
+            setTimeout(loadGameState, 250);
         })
         .catch(() => {
             setMessage("error", "Decoder failed.");
@@ -328,10 +379,7 @@ function submitAnswer() {
             if (data.success) {
                 input.value = "";
                 setMessage("success", data.message);
-
-                setTimeout(() => {
-                    loadGameState();
-                }, 700);
+                setTimeout(loadGameState, 500);
             } else {
                 setMessage("error", data.message);
             }
