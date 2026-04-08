@@ -1,5 +1,7 @@
 let currentState = null;
 
+// ── UTILITIES ──────────────────────────────────────────────────────────────
+
 function setMessage(type, text) {
     const box = document.getElementById("result");
     box.className = `message-box ${type}`;
@@ -9,17 +11,16 @@ function setMessage(type, text) {
 function renderHints(hints) {
     const hintList = document.getElementById("hint-list");
     hintList.innerHTML = "";
-
     if (!hints || hints.length === 0) {
         const li = document.createElement("li");
         li.innerText = "No hints available.";
         hintList.appendChild(li);
         return;
     }
-
-    hints.forEach((hint) => {
+    hints.forEach((hint, i) => {
         const li = document.createElement("li");
         li.innerText = hint;
+        li.style.animationDelay = `${i * 0.08}s`;
         hintList.appendChild(li);
     });
 }
@@ -27,7 +28,6 @@ function renderHints(hints) {
 function updateProgress(progress, total) {
     const shown = Math.min(progress, total);
     const percent = Math.round((shown / total) * 100);
-
     document.getElementById("progress-text").innerText = `${shown} / ${total}`;
     document.getElementById("progress-percentage").innerText = `${percent}%`;
     document.getElementById("progress-fill").style.width = `${percent}%`;
@@ -36,10 +36,10 @@ function updateProgress(progress, total) {
 function renderVaultFragments(fragments) {
     const target = document.getElementById("vault-fragments");
     if (!fragments || fragments.length === 0) {
-        target.innerText = "None yet";
+        target.innerText = "None recovered yet";
         return;
     }
-    target.innerText = fragments.join(" • ");
+    target.innerHTML = fragments.map(f => `<span class="fragment-chip">${f}</span>`).join(" ");
 }
 
 function renderRecoveredEvidence(answers) {
@@ -48,54 +48,88 @@ function renderRecoveredEvidence(answers) {
         target.innerText = "No evidence recovered yet.";
         return;
     }
-
     const parts = [];
-    if (answers.phase_1) parts.push(`Phase 1 password: ${answers.phase_1}`);
-    if (answers.phase_2) parts.push(`Phase 2 intrusion: ${answers.phase_2}`);
-    if (answers.phase_3) parts.push(`Phase 3 relay token: ${answers.phase_3}`);
-    if (answers.phase_4) parts.push(`Phase 4 vault code: ${answers.phase_4}`);
-
-    target.innerHTML = parts.join("<br>");
+    if (answers.phase_1) parts.push(`<div class="evidence-row"><span class="ev-label">Phase 1 password</span><span class="ev-value">${answers.phase_1}</span></div>`);
+    if (answers.phase_2) parts.push(`<div class="evidence-row"><span class="ev-label">Phase 2 intrusion</span><span class="ev-value">${answers.phase_2}</span></div>`);
+    if (answers.phase_3) parts.push(`<div class="evidence-row"><span class="ev-label">Phase 3 token</span><span class="ev-value">${answers.phase_3}</span></div>`);
+    if (answers.phase_4) parts.push(`<div class="evidence-row"><span class="ev-label">Phase 4 vault code</span><span class="ev-value">${answers.phase_4}</span></div>`);
+    target.innerHTML = parts.join("");
 }
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+// ── PHASE 1: Password Audit ────────────────────────────────────────────────
 
 function renderPhase1(state) {
     const tested = state.phase1.tested_candidates || [];
-    const testedHtml = tested.length
-        ? tested.map(c => `<div>${c}</div>`).join("")
-        : "No candidates tested yet.";
+
+    const tableRows = tested.length
+        ? tested.map(c => {
+            // Mark the last tested as match if match_found is newly true
+            const isMatchRow = state.phase1.match_found && c === tested[tested.length - 1];
+            return `
+              <tr class="hash-row ${isMatchRow ? 'hash-match' : ''}">
+                <td class="hash-cell candidate-cell">${escapeHtml(c)}</td>
+                <td class="hash-cell result-cell">${isMatchRow
+                    ? '<span class="match-badge">✓ MATCH</span>'
+                    : '<span class="nomatch-badge">✗ No match</span>'}</td>
+              </tr>`;
+        }).join("")
+        : `<tr><td colspan="2" class="hash-cell muted-cell">No candidates tested yet — enter a candidate below.</td></tr>`;
 
     return `
         <div class="brief-box">
-            <div class="brief-label">Leaked Credentials</div>
+            <div class="brief-label">Leaked Credential</div>
             <div class="brief-text">
-                Username: <strong>${state.phase1.username}</strong><br>
-                Hash Type: <strong>${state.phase1.hash_type}</strong><br>
-                Hash: <strong>${state.phase1.hash}</strong>
+                <div class="cred-row"><span class="cred-key">Username</span><span class="cred-val">${state.phase1.username}</span></div>
+                <div class="cred-row"><span class="cred-key">Hash Type</span><span class="cred-val">${state.phase1.hash_type}</span></div>
+                <div class="cred-row">
+                    <span class="cred-key">Target Hash</span>
+                    <span class="cred-val hash-mono">${state.phase1.hash}</span>
+                </div>
             </div>
         </div>
 
         <div class="brief-box">
-            <div class="brief-label">Candidate Wordlist</div>
+            <div class="brief-label">Recovered Wordlist</div>
+            <div class="brief-text wordlist-grid">
+                ${state.phase1.candidates.map(c => `<span class="wordlist-item">${escapeHtml(c)}</span>`).join("")}
+            </div>
+        </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Hash Tester</div>
             <div class="brief-text">
-                ${state.phase1.candidates.map(candidate => `
-                    <button class="main-btn" style="margin: 4px;" onclick="testCandidate('${candidate}')">${candidate}</button>
-                `).join("")}
+                <p class="tester-note">Type a candidate password below. The server will compute its MD5 and compare against the target hash.</p>
+                <div class="tester-row">
+                    <input type="text" id="candidate-input" placeholder="Enter candidate password..." autocomplete="off" spellcheck="false" />
+                    <button class="sec-btn" onclick="testTypedCandidate()">Test Hash</button>
+                </div>
+                <div id="live-hash-display" class="live-hash-box" style="display:none;"></div>
             </div>
         </div>
 
         <div class="brief-box">
-            <div class="brief-label">Tested Candidates</div>
-            <div class="brief-text">${testedHtml}</div>
+            <div class="brief-label">Test Results <span class="count-badge">${tested.length} tested</span></div>
+            <table class="hash-table">
+                <thead><tr><th class="hash-cell">Candidate</th><th class="hash-cell">Result</th></tr></thead>
+                <tbody>${tableRows}</tbody>
+            </table>
         </div>
 
-        <div class="brief-box">
-            <div class="brief-label">Hash Test Output</div>
-            <div class="brief-text" id="phase1-output">
-                ${state.phase1.match_found ? "A valid hash match has been found. Submit the cracked password." : "Test candidate passwords against the leaked hash."}
-            </div>
-        </div>
+        ${state.phase1.match_found ? `
+        <div class="alert-box success-alert">
+            Hash match confirmed. Enter the exact plaintext password in the submission field below.
+        </div>` : ""}
     `;
 }
+
+// ── PHASE 2: Log Analysis ──────────────────────────────────────────────────
 
 function renderPhase2(state) {
     const rows = state.phase2.rows || [];
@@ -103,97 +137,128 @@ function renderPhase2(state) {
 
     const tableRows = rows.map(row => {
         const isSelected = selected.includes(row.id);
+        const isExternal = row.dept === "External";
         return `
-            <tr onclick="toggleLogRow(${row.id})" style="cursor:pointer; background:${isSelected ? 'rgba(0,240,168,0.12)' : 'transparent'};">
-                <td style="padding:8px;">${isSelected ? "✓" : ""}</td>
-                <td style="padding:8px;">${row.time}</td>
-                <td style="padding:8px;">${row.user}</td>
-                <td style="padding:8px;">${row.ip}</td>
-                <td style="padding:8px;">${row.event}</td>
-                <td style="padding:8px;">${row.status}</td>
-            </tr>
-        `;
+            <tr onclick="toggleLogRow(${row.id})"
+                class="log-row ${isSelected ? 'log-selected' : ''} ${isExternal ? 'log-external-row' : ''}"
+                title="Click to select/deselect">
+                <td class="log-cell sel-cell">${isSelected ? '<span class="sel-tick">✓</span>' : '<span class="sel-dot">·</span>'}</td>
+                <td class="log-cell mono-cell">${row.time}</td>
+                <td class="log-cell">${row.user}</td>
+                <td class="log-cell mono-cell">${row.ip}</td>
+                <td class="log-cell event-cell ${row.event === 'LOGIN_FAILED' ? 'ev-fail' : 'ev-success'}">${row.event}</td>
+                <td class="log-cell dept-cell ${isExternal ? 'dept-ext' : 'dept-int'}">${row.dept}</td>
+            </tr>`;
     }).join("");
 
     return `
         <div class="brief-box">
-            <div class="brief-label">Authentication Logs</div>
-            <div class="brief-text">
-                Click rows to mark the suspicious intrusion sequence.
-                ${state.phase2.analysis_unlocked ? "<br><br><strong>Correct breach pattern identified. You may now submit IP|username.</strong>" : ""}
+            <div class="brief-label">IP Range Reference</div>
+            <div class="brief-text ip-ref-grid">
+                <div class="ip-ref-item"><span class="ip-range int-range">10.0.0.0/8</span><span class="ip-desc">Bank internal infrastructure</span></div>
+                <div class="ip-ref-item"><span class="ip-range int-range">172.16.0.0/12</span><span class="ip-desc">Bank internal infrastructure</span></div>
+                <div class="ip-ref-item"><span class="ip-range ext-range">All other ranges</span><span class="ip-desc">External / untrusted</span></div>
             </div>
-            <div style="overflow-x:auto; margin-top:12px;">
-                <table style="width:100%; border-collapse: collapse;">
+        </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Authentication Log — ${rows.length} entries <span class="sel-count">${selected.length} selected</span></div>
+            <div class="log-scroll">
+                <table class="log-table">
                     <thead>
                         <tr>
-                            <th style="text-align:left; padding:8px;">Sel</th>
-                            <th style="text-align:left; padding:8px;">Time</th>
-                            <th style="text-align:left; padding:8px;">User</th>
-                            <th style="text-align:left; padding:8px;">IP</th>
-                            <th style="text-align:left; padding:8px;">Event</th>
-                            <th style="text-align:left; padding:8px;">Status</th>
+                            <th class="log-cell sel-cell"></th>
+                            <th class="log-cell">Time</th>
+                            <th class="log-cell">User</th>
+                            <th class="log-cell">Source IP</th>
+                            <th class="log-cell">Event</th>
+                            <th class="log-cell">Network</th>
                         </tr>
                     </thead>
                     <tbody>${tableRows}</tbody>
                 </table>
             </div>
+            <p class="log-note">Click rows to mark the breach sequence. Select only the rows that form the attack pattern.</p>
         </div>
+
+        ${state.phase2.analysis_unlocked
+            ? `<div class="alert-box success-alert">Breach pattern confirmed. Submit: <strong>AttackerIP|username</strong></div>`
+            : `<div class="alert-box neutral-alert">Select rows forming the intrusion pattern: rapid failures from one external IP leading to success on the same account.</div>`}
     `;
 }
+
+// ── PHASE 3: Encoded Transmission ─────────────────────────────────────────
 
 function renderPhase3(state) {
     const attempts = state.phase3.decode_attempts || [];
+
     const attemptsHtml = attempts.length
-        ? attempts.map(a => `<div><strong>${a.method}</strong>: ${a.output}</div><br>`).join("")
-        : "No decode attempts yet.";
+        ? attempts.map(a => `
+            <div class="decode-attempt ${a.is_correct ? 'decode-correct' : 'decode-wrong'}">
+                <div class="decode-method-label">${a.method.toUpperCase()} ${a.is_correct
+                    ? '<span class="match-badge">✓ READABLE</span>'
+                    : '<span class="nomatch-badge">✗ GARBLED</span>'}</div>
+                <div class="decode-output">${escapeHtml(a.output)}</div>
+            </div>`).join("")
+        : `<div class="muted-cell">No decode attempts yet.</div>`;
 
     return `
         <div class="brief-box">
-            <div class="brief-label">Captured Message</div>
-            <div class="brief-text">${state.phase3.encoded}</div>
-        </div>
-
-        <div class="brief-box">
-            <div class="brief-label">Decode Methods</div>
+            <div class="brief-label">Intercepted Message (Encoded)</div>
             <div class="brief-text">
-                <button class="main-btn" style="margin:4px;" onclick="decodeWithMethod('base64')">Base64</button>
-                <button class="main-btn" style="margin:4px;" onclick="decodeWithMethod('hex')">Hex</button>
-                <button class="main-btn" style="margin:4px;" onclick="decodeWithMethod('rot13')">ROT13</button>
+                <div class="encoded-display">${escapeHtml(state.phase3.encoded)}</div>
+                <p class="tester-note">This uses a common text-safe encoding scheme. Select a decoder below and judge the output.</p>
             </div>
         </div>
 
         <div class="brief-box">
-            <div class="brief-label">Decoder Output</div>
-            <div class="brief-text" id="phase3-output">
-                ${attemptsHtml}
-                ${state.phase3.correct_method_found ? "<strong>Correct decode method found. Extract the token and submit it.</strong>" : ""}
+            <div class="brief-label">Available Decoders</div>
+            <div class="brief-text decode-btn-row">
+                <button class="sec-btn" onclick="decodeWithMethod('base64')">Base64</button>
+                <button class="sec-btn" onclick="decodeWithMethod('hex')">Hex</button>
+                <button class="sec-btn" onclick="decodeWithMethod('rot13')">ROT13</button>
+                <button class="sec-btn" onclick="decodeWithMethod('caesar')">Caesar</button>
+                <button class="sec-btn" onclick="decodeWithMethod('url')">URL Decode</button>
             </div>
         </div>
+
+        <div class="brief-box">
+            <div class="brief-label">Decoder Output History <span class="count-badge">${attempts.length} tried</span></div>
+            <div class="decode-history">${attemptsHtml}</div>
+        </div>
+
+        ${state.phase3.correct_method_found ? `
+        <div class="alert-box success-alert">
+            Readable output confirmed. Extract the token word from the decoded message and submit it below in lowercase.
+        </div>` : ""}
     `;
 }
+
+// ── PHASE 4: Vault Assembly ────────────────────────────────────────────────
 
 function renderPhase4(state) {
     const password = state.phase_answers.phase_1 || "";
     const passwordLength = password.length;
+    const fragments = state.vault_fragments || [];
 
     return `
         <div class="brief-box">
-            <div class="brief-label">Vault Assembly Rules</div>
+            <div class="brief-label">Assembly Instructions</div>
             <div class="brief-text">
-                Build the final code using:
-                <br>1. The three recovered vault fragments in phase order
-                <br>2. The length of the cracked password from Phase 1
+                <div class="rule-step"><span class="rule-num">1</span><span>Concatenate vault fragments in phase order: Phase 1 → Phase 2 → Phase 3</span></div>
+                <div class="rule-step"><span class="rule-num">2</span><span>Append the exact character count of the Phase 1 plaintext password</span></div>
+                <div class="rule-step"><span class="rule-num">3</span><span>No separators — submit the full numeric string</span></div>
             </div>
         </div>
 
         <div class="brief-box">
             <div class="brief-label">Recovered Evidence</div>
             <div class="brief-text">
-                Phase 1 password: <strong>${state.phase_answers.phase_1 || "Not found"}</strong><br>
-                Phase 1 password length: <strong>${passwordLength || "Unknown"}</strong><br>
-                Phase 2 intrusion: <strong>${state.phase_answers.phase_2 || "Not found"}</strong><br>
-                Phase 3 relay token: <strong>${state.phase_answers.phase_3 || "Not found"}</strong><br>
-                Vault fragments: <strong>${(state.vault_fragments || []).join(" • ") || "None"}</strong>
+                <div class="evidence-row"><span class="ev-label">Phase 1 password</span><span class="ev-value">${state.phase_answers.phase_1 || '<span class="muted-val">Not recovered</span>'}</span></div>
+                <div class="evidence-row"><span class="ev-label">Password character count</span><span class="ev-value">${passwordLength ? passwordLength + ' characters' : '<span class="muted-val">Unknown</span>'}</span></div>
+                <div class="evidence-row"><span class="ev-label">Phase 2 intrusion</span><span class="ev-value">${state.phase_answers.phase_2 || '<span class="muted-val">Not recovered</span>'}</span></div>
+                <div class="evidence-row"><span class="ev-label">Phase 3 relay token</span><span class="ev-value">${state.phase_answers.phase_3 || '<span class="muted-val">Not recovered</span>'}</span></div>
+                <div class="evidence-row"><span class="ev-label">Vault fragments</span><span class="ev-value">${fragments.length ? fragments.map(f => `<span class="fragment-chip">${f}</span>`).join(" ") : '<span class="muted-val">None</span>'}</span></div>
             </div>
         </div>
     `;
@@ -201,12 +266,17 @@ function renderPhase4(state) {
 
 function renderCompleted() {
     return `
-        <div class="brief-box">
-            <div class="brief-label">Vault Entry</div>
+        <div class="brief-box complete-box">
+            <div class="brief-label">Operation Complete</div>
             <div class="brief-text">
                 The final vault door unlocks with a deep mechanical click. The chamber is open.
-                You successfully completed the cyber bank heist.
             </div>
+        </div>
+        <div class="completion-grid">
+            <div class="completion-stat"><span class="cs-label">Password Auditing</span><span class="cs-val">✓</span></div>
+            <div class="completion-stat"><span class="cs-label">Log Analysis</span><span class="cs-val">✓</span></div>
+            <div class="completion-stat"><span class="cs-label">Data Decoding</span><span class="cs-val">✓</span></div>
+            <div class="completion-stat"><span class="cs-label">Evidence Synthesis</span><span class="cs-val">✓</span></div>
         </div>
     `;
 }
@@ -224,6 +294,7 @@ function renderPhaseContent(state) {
 
     if (state.progress === 1) {
         container.innerHTML = renderPhase1(state);
+        attachCandidateInputListeners();
     } else if (state.progress === 2) {
         container.innerHTML = renderPhase2(state);
     } else if (state.progress === 3) {
@@ -233,19 +304,30 @@ function renderPhaseContent(state) {
     }
 }
 
+function attachCandidateInputListeners() {
+    const input = document.getElementById("candidate-input");
+    if (!input) return;
+    input.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") testTypedCandidate();
+    });
+}
+
+// ── LOAD STATE ─────────────────────────────────────────────────────────────
+
 function loadGameState() {
     fetch("/get_game_state")
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
             currentState = data;
-
             updateProgress(data.progress, data.total);
             document.getElementById("challenge-title").innerText = data.title;
             document.getElementById("challenge-desc").innerText = data.description;
             document.getElementById("objective-text").innerText = data.objective;
             document.getElementById("task-brief").innerText = data.task_brief;
             document.getElementById("answer-label").innerText = data.answer_label || "";
-            document.getElementById("status-pill").innerText = data.completed ? "Vault Opened" : `Phase ${data.progress} Active`;
+            document.getElementById("status-pill").innerText = data.completed
+                ? "Vault Opened"
+                : `Phase ${Math.min(data.progress, data.total)} Active`;
 
             renderHints(data.hints);
             renderVaultFragments(data.vault_fragments);
@@ -254,127 +336,111 @@ function loadGameState() {
 
             if (data.completed) {
                 setMessage("success", "HEIST COMPLETE — VAULT ENTERED");
+                document.getElementById("status-pill").classList.add("status-complete");
             } else {
-                document.getElementById("answer-input").disabled = false;
+                const inp = document.getElementById("answer-input");
+                if (inp) inp.disabled = false;
                 setMessage("neutral", "Awaiting answer...");
             }
         })
-        .catch(() => {
-            setMessage("error", "Failed to load challenge data.");
-        });
+        .catch(() => setMessage("error", "Failed to load challenge data."));
 }
 
-function testCandidate(candidate) {
+// ── ACTIONS ────────────────────────────────────────────────────────────────
+
+function testTypedCandidate() {
+    const input = document.getElementById("candidate-input");
+    if (!input) return;
+    const candidate = input.value.trim();
+
+    if (!candidate) {
+        setMessage("error", "Enter a candidate password to test.");
+        return;
+    }
+
     fetch("/phase1_test_candidate", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ candidate: candidate })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate })
     })
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
-            if (!data.success) {
-                setMessage("error", data.message);
-                return;
-            }
+            if (!data.success) { setMessage("error", data.message); return; }
 
-            const output = document.getElementById("phase1-output");
-            output.innerHTML = `
-                Candidate: <strong>${data.candidate}</strong><br>
-                MD5: <strong>${data.candidate_hash}</strong><br>
-                Result: <strong>${data.message}</strong>
-            `;
+            const display = document.getElementById("live-hash-display");
+            if (display) {
+                display.style.display = "block";
+                display.innerHTML = `
+                    <div class="hash-compare">
+                        <div class="hc-row"><span class="hc-label">Candidate</span><span class="hc-val mono">${escapeHtml(data.candidate)}</span></div>
+                        <div class="hc-row"><span class="hc-label">Computed MD5</span><span class="hc-val mono ${data.is_match ? 'match-text' : ''}">${data.candidate_hash}</span></div>
+                        <div class="hc-row"><span class="hc-label">Target Hash&nbsp;&nbsp;</span><span class="hc-val mono">${data.target_hash}</span></div>
+                        <div class="hc-row"><span class="hc-label">Result</span><span class="hc-val ${data.is_match ? 'match-text' : 'nomatch-text'}">${data.message}</span></div>
+                    </div>`;
+            }
 
             if (data.is_match) {
-                setMessage("success", "Correct candidate found. Now submit the cracked password.");
+                setMessage("success", "Hash match found. Enter the exact plaintext password below to submit.");
             } else {
-                setMessage("neutral", "No match. Test another candidate.");
+                setMessage("neutral", `No match for '${escapeHtml(data.candidate)}'. Try the next candidate.`);
             }
 
+            input.value = "";
             setTimeout(loadGameState, 250);
         })
-        .catch(() => {
-            setMessage("error", "Candidate test failed.");
-        });
+        .catch(() => setMessage("error", "Candidate test failed."));
 }
 
 function toggleLogRow(rowId) {
     fetch("/phase2_toggle_row", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ row_id: rowId })
     })
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
-            if (!data.success) {
-                setMessage("error", data.message);
-                return;
-            }
-
+            if (!data.success) { setMessage("error", data.message); return; }
             if (data.analysis_unlocked) {
-                setMessage("success", "Correct intrusion pattern identified. Submit IP|username.");
+                setMessage("success", "Correct breach pattern identified. Submit: AttackerIP|username");
             } else {
-                setMessage("neutral", "Log selection updated.");
+                setMessage("neutral", "Row selection updated. Keep building the breach sequence.");
             }
-
             loadGameState();
         })
-        .catch(() => {
-            setMessage("error", "Failed to update log selection.");
-        });
+        .catch(() => setMessage("error", "Failed to update log selection."));
 }
 
 function decodeWithMethod(method) {
     fetch("/phase3_decode", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ method: method })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method })
     })
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
-            if (!data.success) {
-                setMessage("error", data.message);
-                return;
-            }
-
-            const output = document.getElementById("phase3-output");
-            output.innerHTML += `<div><strong>${data.method}</strong>: ${data.output}</div><br>`;
-
+            if (!data.success) { setMessage("error", data.message); return; }
             if (data.correct_method_found) {
-                setMessage("success", "Correct decode method found. Extract the token and submit it.");
+                setMessage("success", "Readable output confirmed. Extract the relay token and submit below.");
             } else {
-                setMessage("neutral", "Wrong method. Try another decoder.");
+                setMessage("neutral", `${method.toUpperCase()} produced garbled output. Try another method.`);
             }
-
             setTimeout(loadGameState, 250);
         })
-        .catch(() => {
-            setMessage("error", "Decoder failed.");
-        });
+        .catch(() => setMessage("error", "Decoder failed."));
 }
 
 function submitAnswer() {
     const input = document.getElementById("answer-input");
     const answer = input.value.trim();
 
-    if (!answer) {
-        setMessage("error", "Enter an answer before submitting.");
-        return;
-    }
+    if (!answer) { setMessage("error", "Enter an answer before submitting."); return; }
 
     fetch("/submit_answer", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ answer: answer })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer })
     })
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
             if (data.success) {
                 input.value = "";
@@ -384,9 +450,7 @@ function submitAnswer() {
                 setMessage("error", data.message);
             }
         })
-        .catch(() => {
-            setMessage("error", "Submission failed.");
-        });
+        .catch(() => setMessage("error", "Submission failed."));
 }
 
 window.onload = function () {
