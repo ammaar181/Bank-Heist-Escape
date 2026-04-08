@@ -1,13 +1,3 @@
-"""
-Bank Heist Escape Room — UPGRADED v2.0
-University-level cybersecurity challenge for final-year students.
-
-Phase 1: Salted SHA-256 hash cracking with 120-candidate wordlist + attempt penalties
-Phase 2: 35-entry SIEM log with multiple IPs, false positives, two suspicious actors
-Phase 3: Triple-layer encoding (Base64 → ROT13 → Caesar-7)
-Phase 4: Synthesis vault code requiring all phase data + transformation rule
-"""
-
 from flask import Flask, render_template, request, jsonify, session
 import os
 import base64

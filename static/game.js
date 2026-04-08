@@ -1,9 +1,3 @@
-/**
- * Bank Heist Escape Room — UPGRADED v2.0
- * Frontend logic for all 4 phases.
- * Maintains terminal/SIEM aesthetic throughout.
- */
-
 "use strict";
 
 let currentState = null;

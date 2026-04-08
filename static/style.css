@@ -1,8 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   BANK HEIST ESCAPE ROOM — v2.0 STYLESHEET
-   Dark terminal / SIEM dashboard aesthetic
-   ═══════════════════════════════════════════════════════════════════════════ */
-
 /* ── RESET & BASE ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
