@@ -3,88 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bank Heist System</title>
+    <title>Bank Heist // Intrusion Simulation</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="game-body">
     <div class="game-bg"></div>
 
+    <!-- LOCKOUT WARNING BANNER -->
+    <div id="lockout-banner" class="lockout-banner" style="display:none;">
+        ⚠ SECURITY ALERT: Excessive failed submissions detected. In a real environment,
+        your access would be locked. Review your reasoning before attempting further submissions.
+    </div>
+
     <main class="game-wrap">
+
+        <!-- HEADER -->
         <header class="game-header">
-            <div>
-                <div class="eyebrow">BANK NETWORK // LIVE OPERATION</div>
-                <h1 class="system-title">BANK HEIST SYSTEM</h1>
+            <div class="header-left">
+                <div class="eyebrow">BANK NETWORK // LIVE INTRUSION SIMULATION</div>
+                <h1 class="system-title">FORTIS BANK — SECURITY OVERRIDE</h1>
             </div>
-            <div class="live-status" id="status-pill">Operation Active</div>
+            <div class="header-right">
+                <div class="live-status" id="status-pill">⬤ Operation Active</div>
+                <button class="btn-reset-header" onclick="resetGame()">↺ Reset</button>
+            </div>
         </header>
 
+        <!-- HUD ROW -->
         <section class="hud-row">
             <div class="hud-card">
-                <div class="hud-label">Progress</div>
+                <div class="hud-label">Phase Progress</div>
                 <div class="hud-value" id="progress-text">1 / 4</div>
             </div>
-
             <div class="hud-card wide-card">
-                <div class="hud-label">Objective</div>
-                <div class="hud-value" id="objective-text">Loading...</div>
+                <div class="hud-label">Current Objective</div>
+                <div class="hud-value hud-obj" id="phase-objective">Loading...</div>
+            </div>
+            <div class="hud-card">
+                <div class="hud-label">Completion</div>
+                <div class="hud-value" id="progress-percentage">0%</div>
             </div>
         </section>
 
+        <!-- PROGRESS BAR -->
         <section class="progress-box">
             <div class="progress-meta">
                 <span>Operation Progress</span>
-                <span id="progress-percentage">0%</span>
+                <span id="progress-percentage-bar">0%</span>
             </div>
             <div class="progress-track">
                 <div class="progress-bar-fill" id="progress-fill"></div>
             </div>
         </section>
 
+        <!-- MAIN GRID -->
         <section class="game-grid">
-            <div class="panel main-panel">
-                <div class="panel-tag">CURRENT CHALLENGE</div>
-                <h2 id="challenge-title">Loading challenge...</h2>
-                <p class="panel-text" id="challenge-desc">Retrieving challenge data...</p>
 
-                <div class="brief-box">
-                    <div class="brief-label">Task Brief</div>
-                    <div class="brief-text" id="task-brief">Loading task brief...</div>
+            <!-- ── LEFT: MAIN CHALLENGE PANEL ── -->
+            <div class="panel main-panel">
+
+                <div class="panel-tag">ACTIVE CHALLENGE</div>
+                <h2 class="panel-phase-title" id="phase-title">Loading...</h2>
+                <p class="panel-text panel-description" id="phase-description">Retrieving challenge data...</p>
+
+                <!-- Task Brief -->
+                <div class="brief-box task-brief-box">
+                    <div class="brief-label">MISSION BRIEF</div>
+                    <div class="brief-text" id="phase-task-brief">Loading brief...</div>
                 </div>
 
-                <div id="phase-content"></div>
+                <!-- Dynamic Phase UI injected here -->
+                <div id="phase-ui"></div>
 
-                <div class="answer-section" id="answer-section">
-                    <label class="answer-label" for="answer-input" id="answer-label">Enter your answer</label>
+                <!-- Answer Submission Form -->
+                <div id="answer-form" class="answer-section">
+                    <label class="answer-label" for="answer-input" id="answer-label">
+                        Enter your answer
+                    </label>
                     <div class="answer-row">
-                        <input type="text" id="answer-input" placeholder="Type your answer here">
-                        <button class="main-btn" onclick="submitAnswer()">Submit</button>
+                        <input
+                            type="text"
+                            id="answer-input"
+                            class="input-field"
+                            placeholder="Type your answer here..."
+                            autocomplete="off"
+                            spellcheck="false"
+                        />
+                        <button class="btn-submit" id="submit-btn" onclick="submitAnswer()">
+                            ▶ Submit
+                        </button>
                     </div>
                 </div>
 
-                <div class="message-box neutral" id="result">Awaiting answer...</div>
-            </div>
+                <!-- Result Message Box -->
+                <div class="message-box neutral" id="result">Awaiting submission...</div>
 
+            </div><!-- /main-panel -->
+
+            <!-- ── RIGHT: SIDEBAR ── -->
             <aside class="panel side-panel">
-                <div class="panel-tag">OFFLINE SUPPORT</div>
-                <h3>Inside Man</h3>
-                <p class="panel-text">
-                    Your insider cannot touch the system directly, but can feed you clues to keep the operation moving.
-                </p>
-                <ul class="hint-list" id="hint-list">
-                    <li>Loading hints...</li>
-                </ul>
 
-                <div class="brief-box" style="margin-top: 18px;">
-                    <div class="brief-label">Recovered Vault Fragments</div>
-                    <div class="brief-text" id="vault-fragments">None yet</div>
+                <!-- Insider intel / hints -->
+                <div class="panel-tag">INSIDER INTEL</div>
+                <h3 class="side-title">Inside Man</h3>
+                <p class="panel-text side-desc">
+                    Your contact cannot directly touch the system, but can feed intelligence
+                    to keep the operation moving. Use hints only if stuck.
+                </p>
+
+                <button class="btn-hint-toggle" id="hint-toggle-btn" onclick="toggleHints()">
+                    ▼ View Intel (Hints)
+                </button>
+
+                <div id="hint-panel" style="display:none;">
+                    <ul class="hint-list" id="hint-list">
+                        <li>Loading hints...</li>
+                    </ul>
                 </div>
 
-                <div class="brief-box" style="margin-top: 18px;">
-                    <div class="brief-label">Recovered Evidence</div>
+                <!-- Vault Fragments -->
+                <div class="brief-box side-brief-box" style="margin-top: 18px;">
+                    <div class="brief-label">VAULT FRAGMENTS RECOVERED</div>
+                    <div class="brief-text" id="vault-fragments">None recovered yet</div>
+                </div>
+
+                <!-- Recovered Evidence -->
+                <div class="brief-box side-brief-box" style="margin-top: 12px;">
+                    <div class="brief-label">RECOVERED EVIDENCE</div>
                     <div class="brief-text" id="recovered-evidence">No evidence recovered yet.</div>
                 </div>
-            </aside>
-        </section>
+
+                <!-- Phase Reference Card -->
+                <div class="brief-box side-brief-box phase-ref" style="margin-top: 12px;">
+                    <div class="brief-label">PHASE MAP</div>
+                    <div class="brief-text">
+                        <div class="phase-ref-item" id="pref-1">1. Salted Hash Recovery</div>
+                        <div class="phase-ref-item" id="pref-2">2. SIEM Log Forensics</div>
+                        <div class="phase-ref-item" id="pref-3">3. Multi-Layer Decoding</div>
+                        <div class="phase-ref-item" id="pref-4">4. Vault Synthesis</div>
+                    </div>
+                </div>
+
+            </aside><!-- /side-panel -->
+
+        </section><!-- /game-grid -->
+
     </main>
 
     <script src="/static/game.js"></script>
