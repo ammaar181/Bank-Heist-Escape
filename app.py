@@ -17,10 +17,7 @@ LOCKOUT_THRESHOLD = 8  # cosmetic lockout warning after this many total wrong su
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 1 — Salted SHA-256 password recovery
-#
 # Hash formula: SHA-256(salt + password)
-# Salt is shown to students via a recovered config comment in the UI.
-# This forces understanding of why pre-computed tables fail on salted hashes.
 # Correct answer: vaultrun#9
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -66,27 +63,6 @@ PHASE1_CANDIDATES = [
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 2 — SIEM log forensics
-#
-# 40 entries, 5-hour window. Three external actors require investigation.
-#
-# Actor A — j.okafor / 46.55.210.13 (FALSE POSITIVE — bulletin documented)
-#   Travelling employee. Logs in, downloads HR forms. Benign.
-#   Rule-out method: the security bulletin pre-authorises this account.
-#
-# Actor B — p.walsh / 185.92.73.18 (FALSE POSITIVE — rule out by behaviour)
-#   Contractor whose VPN certificate expired. Manual login failures (12–18s
-#   spacing = human pacing, not automation). After success: reads only
-#   /reports/public and /portal/dashboard — non-sensitive, small byte volumes.
-#   No vault access. No bulk download. Logs out normally.
-#   Rule-out method: post-login behaviour and failure timing, NOT the bulletin.
-#   (Walsh is NOT mentioned in the bulletin — students must analyse behaviour.)
-#
-# Actor C — c.dreyfus / 91.108.4.77 (PRIMARY ATTACKER)
-#   Automated failures against /vault/auth endpoint (3–5s spacing).
-#   After success: immediately pulls /vault/manifest (45 KB) and /vault/keys.enc
-#   (88 KB) — sensitive vault material, exfiltrated within 7 seconds of entry.
-#   Rule-in method: automated timing + vault endpoint + bulk exfiltration.
-#
 # Correct answer: 91.108.4.77|c.dreyfus|brute_force
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -157,22 +133,8 @@ PHASE2_BENIGN_IDS = {7, 8, 9, 10, 13, 14, 15, 16, 17, 18, 19, 33, 34, 35}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 3 — Two-layer encoded transmission
-#
 # Encoding pipeline (what the attacker did to transmit):
 #   plaintext → ROT13 → Base64 → transmitted blob
-#
-# Decoding pipeline (what the student must do):
-#   transmitted blob → Base64 decode → ROT13 decode → plaintext
-#
-# Wrong-order trap:
-#   If student applies ROT13 first to the Base64 blob, they get a string that
-#   still looks like it could be encoded (shifted Base64 chars) — plausible
-#   but wrong. Subsequent Base64 decode of that will fail or produce garbage.
-#
-#   If student applies Base64 correctly but then tries Caesar-3 instead of
-#   ROT13 on the intermediate, they get letter-shifted output that is
-#   grammatically wrong but may superficially resemble English.
-#
 # Token: OBSIDIAN (submit lowercase: obsidian)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -206,13 +168,6 @@ PHASE3_TOKEN = "obsidian"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 4 — VLT-7 reflected vault code
-#
-# In-universe: Fortis Bank vault firmware implements protocol VLT-7, a
-# reflected-entry sequence. The composite code is assembled from operational
-# data and then reversed before submission — analogous to CRC bit-reflection
-# used in the vault's hardware checksum layer.
-#
-# Assembly:
 #   Fragments in phase order:       "4" + "8" + "6"  → "486"
 #   Append Phase 1 password length: len("vaultrun#9") = 10  → "48610"
 #   Append unique attacker IP count: 1 (only 91.108.4.77)   → "486101"

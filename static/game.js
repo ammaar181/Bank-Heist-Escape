@@ -188,9 +188,6 @@ async function quickTest(candidate) {
 
 
 // ── PHASE 2: SIEM LOG ANALYSIS ───────────────────────────────────────────────
-// Design intent: present the data for comparison — do not pre-label actors.
-// The behaviour-comparison panel surfaces the timing and byte data side-by-side
-// so students must draw the conclusion themselves.
 
 function renderPhase2(state) {
     const p2  = state.phase2;
@@ -336,10 +333,6 @@ async function toggleRow(id) {
 
 
 // ── PHASE 3: DECODE TOOL ─────────────────────────────────────────────────────
-// Design intent: tool returns raw output only, no correct/incorrect labelling.
-// Students read the output and chain steps manually.
-// The layer tracker is shown but not explained — it confirms work done,
-// not what to do next.
 
 function renderPhase3(state) {
     const p3      = state.phase3;
