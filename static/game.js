@@ -1,8 +1,7 @@
 "use strict";
-
 let currentState = null;
 
-// ── UTILITIES ───────────────────────────────────────────────────────────────
+// ── UTILITIES ────────────────────────────────────────────────────────────────
 
 function setMessage(type, text) {
     const box = document.getElementById("result");
@@ -12,48 +11,41 @@ function setMessage(type, text) {
 }
 
 function renderHints(hints) {
-    const hintList = document.getElementById("hint-list");
-    hintList.innerHTML = "";
-    (hints || []).forEach((hint, i) => {
+    const list = document.getElementById("hint-list");
+    list.innerHTML = "";
+    (hints || []).forEach((h, i) => {
         const li = document.createElement("li");
-        li.innerHTML = hint;
+        li.innerHTML = h;
         li.style.animationDelay = `${i * 0.07}s`;
-        hintList.appendChild(li);
+        list.appendChild(li);
     });
 }
 
 function updateProgress(progress, total) {
-    const shown = Math.min(progress, total);
-    const pct = Math.round((shown / total) * 100);
-    document.getElementById("progress-text").textContent = `${shown} / ${total}`;
+    const pct = Math.round((Math.min(progress, total) / total) * 100);
+    document.getElementById("progress-text").textContent = `${Math.min(progress, total)} / ${total}`;
     document.getElementById("progress-percentage").textContent = `${pct}%`;
     document.getElementById("progress-fill").style.width = `${pct}%`;
 }
 
-function renderVaultFragments(fragments) {
-    const target = document.getElementById("vault-fragments");
-    if (!fragments || !fragments.length) {
-        target.textContent = "None recovered yet";
-        return;
-    }
-    target.innerHTML = fragments.map(f =>
-        `<span class="fragment-chip">${escapeHtml(f)}</span>`
-    ).join(" ");
+function renderVaultFragments(frags) {
+    const el = document.getElementById("vault-fragments");
+    if (!frags || !frags.length) { el.textContent = "None recovered yet"; return; }
+    el.innerHTML = frags.map(f => `<span class="fragment-chip">${escapeHtml(f)}</span>`).join(" ");
 }
 
 function renderRecoveredEvidence(answers) {
-    const target = document.getElementById("recovered-evidence");
+    const el = document.getElementById("recovered-evidence");
     if (!answers || !Object.keys(answers).length) {
-        target.textContent = "No evidence recovered yet.";
-        return;
+        el.textContent = "No evidence recovered yet."; return;
     }
     const labels = {
-        phase_1: "Phase 1 — plaintext password",
-        phase_2: "Phase 2 — breach details",
-        phase_3: "Phase 3 — codename token",
+        phase_1: "Phase 1 — password",
+        phase_2: "Phase 2 — breach",
+        phase_3: "Phase 3 — codename",
         phase_4: "Phase 4 — vault code",
     };
-    target.innerHTML = Object.entries(answers).map(([k, v]) =>
+    el.innerHTML = Object.entries(answers).map(([k, v]) =>
         `<div class="evidence-row">
            <span class="ev-label">${labels[k] || k}</span>
            <span class="ev-value">${escapeHtml(v)}</span>
@@ -63,518 +55,460 @@ function renderRecoveredEvidence(answers) {
 
 function escapeHtml(str) {
     return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function renderWrongCounter(count, phaseNum) {
+function wrongCounter(count, phase) {
     if (!count) return "";
-    const danger = count >= 5 ? "counter-danger" : count >= 3 ? "counter-warn" : "";
-    return `<div class="wrong-counter ${danger}">⚠ ${count} failed attempt${count !== 1 ? "s" : ""} on Phase ${phaseNum}</div>`;
+    const cls = count >= 5 ? "counter-danger" : count >= 3 ? "counter-warn" : "";
+    return `<div class="wrong-counter ${cls}">⚠ ${count} failed attempt${count !== 1 ? "s" : ""} on Phase ${phase}</div>`;
 }
 
-// ── PHASE 1: SALTED SHA-256 CRACKER ─────────────────────────────────────────
+
+// ── PHASE 1: SALTED SHA-256 ──────────────────────────────────────────────────
 
 function renderPhase1(state) {
     const p1 = state.phase1;
     const tested = p1.tested_candidates || [];
+    const testedSet = new Set(tested);
 
-    // Build hash comparison table
-    let tableBody;
-    if (tested.length === 0) {
-        tableBody = `<tr><td colspan="3" class="hash-cell muted-cell">
-            No candidates tested — select from wordlist or type manually below.
+    // Hash comparison table
+    let tbody;
+    if (!tested.length) {
+        tbody = `<tr><td colspan="3" class="hash-cell muted-cell">
+            No candidates tested — select from the wordlist or type below.
         </td></tr>`;
     } else {
-        tableBody = tested.map((c, idx) => {
-            const isLast = idx === tested.length - 1;
+        tbody = tested.map((c, i) => {
+            const isLast  = i === tested.length - 1;
             const isMatch = p1.match_found && isLast;
             return `<tr class="hash-row ${isMatch ? "hash-match" : ""}">
                 <td class="hash-cell candidate-cell mono-sm">${escapeHtml(c)}</td>
-                <td class="hash-cell hash-mono mono-xs">
+                <td class="hash-cell">
                     ${isMatch
-                        ? `<span class="match-badge">✓ MATCH</span>`
-                        : `<span class="nomatch-badge">✗ mismatch</span>`
-                    }
+                        ? '<span class="match-badge">✓ MATCH</span>'
+                        : '<span class="nomatch-badge">✗</span>'}
                 </td>
-                <td class="hash-cell mono-xs computed-hash-cell" id="computed-${idx}">
-                    — (click Compute to reveal)
-                </td>
+                <td class="hash-cell hash-mono mono-xs computed-col" id="hc-${i}">—</td>
             </tr>`;
         }).join("");
     }
 
-    // Wordlist grid — paginated to 30 per page for readability
-    const perPage = 30;
-    const candidates = p1.candidates || [];
-    const testedSet = new Set(tested);
-
-    const wordlistItems = candidates.map(c => {
+    // Wordlist grid
+    const wordlistHtml = (p1.candidates || []).map(c => {
         const done = testedSet.has(c);
-        const isMatchCand = p1.match_found && tested.includes(c) && tested[tested.length - 1] === c;
-        return `<span
-            class="wordlist-item ${done ? "tested" : ""} ${isMatchCand ? "matched" : ""}"
-            onclick="quickTestCandidate('${escapeHtml(c)}')"
-            title="${done ? "Already tested" : "Click to test"}"
-        >${escapeHtml(c)}</span>`;
+        const matched = p1.match_found && tested[tested.length - 1] === c && done;
+        return `<span class="wordlist-item ${done ? "tested" : ""} ${matched ? "matched" : ""}"
+                    onclick="quickTest('${escapeHtml(c).replace(/'/g, "\\'")}')"
+                    title="${done ? "Tested" : "Click to test"}">${escapeHtml(c)}</span>`;
     }).join("");
 
     return `
-    <!-- Leaked credential block -->
     <div class="brief-box">
         <div class="brief-label">RECOVERED CREDENTIAL DUMP — e.mercer</div>
         <div class="brief-text">
-            <div class="cred-row">
-                <span class="cred-key">Username</span>
-                <span class="cred-val">${escapeHtml(p1.username)}</span>
-            </div>
-            <div class="cred-row">
-                <span class="cred-key">Hash Algorithm</span>
-                <span class="cred-val">${escapeHtml(p1.hash_type)}</span>
-            </div>
-            <div class="cred-row">
-                <span class="cred-key">Config Comment</span>
-                <span class="cred-val hint-amber">${escapeHtml(p1.salt_hint)}</span>
-            </div>
-            <div class="cred-row">
-                <span class="cred-key">Target Hash</span>
-                <span class="cred-val hash-mono hash-break">${escapeHtml(p1.hash)}</span>
-            </div>
+            <div class="cred-row"><span class="cred-key">Username</span><span class="cred-val">${escapeHtml(p1.username)}</span></div>
+            <div class="cred-row"><span class="cred-key">Hash type</span><span class="cred-val">${escapeHtml(p1.hash_type)}</span></div>
+            <div class="cred-row"><span class="cred-key">Config comment</span><span class="cred-val hint-amber mono-sm">${escapeHtml(p1.salt_hint)}</span></div>
+            <div class="cred-row"><span class="cred-key">Target hash</span><span class="cred-val hash-mono hash-break">${escapeHtml(p1.hash)}</span></div>
         </div>
     </div>
-
-    <!-- Algorithm note -->
     <div class="brief-box algo-note">
         <div class="brief-label">HASH FORMULA</div>
         <div class="brief-text mono-sm">
-            SHA-256( <span class="hint-amber">salt</span> + <span class="hint-green">candidate</span> ) → 64-char hex digest<br>
-            The salt is prepended. Reverse engineering is computationally infeasible — use the wordlist.
+            SHA-256( <span class="hint-amber">salt</span> + <span class="hint-green">candidate</span> )
+            → 64-character hex digest
         </div>
     </div>
-
-    <!-- Wordlist -->
     <div class="brief-box">
-        <div class="brief-label">WORDLIST — ${candidates.length} CANDIDATES
+        <div class="brief-label">WORDLIST — ${(p1.candidates || []).length} CANDIDATES
             <span class="tested-badge">${tested.length} tested</span>
         </div>
-        <div class="wordlist-grid">${wordlistItems}</div>
+        <div class="wordlist-grid">${wordlistHtml}</div>
     </div>
-
-    <!-- Hash comparison table -->
     <div class="brief-box">
         <div class="brief-label">HASH COMPARISON LOG</div>
         <table class="hash-table">
-            <thead>
-                <tr>
-                    <th>Candidate</th>
-                    <th>Result</th>
-                    <th>Computed Hash</th>
-                </tr>
-            </thead>
-            <tbody id="hash-table-body">${tableBody}</tbody>
+            <thead><tr><th>Candidate</th><th>Result</th><th>Computed Hash</th></tr></thead>
+            <tbody id="hash-tbody">${tbody}</tbody>
         </table>
     </div>
-
-    <!-- Manual tester -->
     <div class="brief-box">
-        <div class="brief-label">MANUAL CANDIDATE TESTER</div>
+        <div class="brief-label">MANUAL TESTER</div>
         <div class="tester-row">
-            <input type="text" id="candidate-input" placeholder="Type candidate password..."
-                   class="input-field mono-sm" onkeydown="if(event.key==='Enter') testCandidate()" />
-            <button class="btn-action" onclick="testCandidate()">▶ Test Hash</button>
+            <input type="text" id="cand-input" class="input-field mono-sm"
+                placeholder="Type candidate password…"
+                onkeydown="if(event.key==='Enter') testCandidate()" />
+            <button class="btn-action" onclick="testCandidate()">▶ Test</button>
         </div>
-        <div id="tester-output" class="tester-output hidden"></div>
+        <div id="tester-out" class="tester-output hidden"></div>
     </div>
-
-    ${renderWrongCounter(p1.wrong_submits, 1)}
-    `;
+    ${wrongCounter(p1.wrong_submits, 1)}`;
 }
 
 async function testCandidate() {
-    const input = document.getElementById("candidate-input");
-    const candidate = input.value.trim();
-    if (!candidate) {
-        setMessage("error", "Enter a candidate password to test.");
-        return;
-    }
+    const inp = document.getElementById("cand-input");
+    const candidate = inp.value.trim();
+    if (!candidate) { setMessage("error", "Enter a candidate to test."); return; }
 
-    const outDiv = document.getElementById("tester-output");
-    outDiv.className = "tester-output";
-    outDiv.innerHTML = `<span class="computing">⟳ Computing SHA-256(salt + "${escapeHtml(candidate)}")...</span>`;
+    const out = document.getElementById("tester-out");
+    out.className = "tester-output";
+    out.innerHTML = `<span class="computing">⟳ Computing SHA-256(salt + "${escapeHtml(candidate)}")…</span>`;
 
     try {
-        const res = await fetch("/phase1_test_candidate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+        const res  = await fetch("/phase1_test_candidate", {
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ candidate }),
         });
         const data = await res.json();
+        if (!data.success) { out.innerHTML = `<span class="error-text">${escapeHtml(data.message)}</span>`; return; }
 
-        if (!data.success) {
-            outDiv.innerHTML = `<span class="error-text">${escapeHtml(data.message)}</span>`;
-            return;
-        }
-
-        const matchClass = data.is_match ? "match-result" : "nomatch-result";
-        outDiv.innerHTML = `
-            <div class="${matchClass}">
-                <div class="hash-line">
-                    <span class="hl-label">Candidate:</span>
-                    <span class="hl-value mono-sm">${escapeHtml(data.candidate)}</span>
+        const cls = data.is_match ? "match-result" : "nomatch-result";
+        out.innerHTML = `
+            <div class="${cls}">
+                <div class="hash-line"><span class="hl-label">Candidate:</span><span class="hl-value mono-sm">${escapeHtml(data.candidate)}</span></div>
+                <div class="hash-line"><span class="hl-label">Computed: </span><span class="hl-value hash-mono mono-xs">${escapeHtml(data.computed_hash)}</span></div>
+                <div class="hash-line"><span class="hl-label">Target:   </span><span class="hl-value hash-mono mono-xs">${escapeHtml(data.target_hash)}</span></div>
+                <div class="hash-verdict ${data.is_match ? "verdict-match" : "verdict-miss"}">
+                    ${data.is_match ? "✓ HASH MATCH" : "✗ No match"}
                 </div>
-                <div class="hash-line">
-                    <span class="hl-label">Computed:</span>
-                    <span class="hl-value hash-mono mono-xs">${escapeHtml(data.candidate_hash)}</span>
-                </div>
-                <div class="hash-line">
-                    <span class="hl-label">Target:</span>
-                    <span class="hl-value hash-mono mono-xs">${escapeHtml(data.target_hash)}</span>
-                </div>
-                <div class="hash-verdict ${data.is_match ? 'verdict-match' : 'verdict-miss'}">
-                    ${data.is_match ? "✓ HASH MATCH — credential confirmed" : "✗ Hash mismatch"}
-                </div>
-                <div class="attempt-count">Total tested: ${data.attempts_used}</div>
-            </div>
-        `;
-
-        if (data.is_match) {
-            setMessage("success", `Hash match confirmed for candidate. If this is correct, submit it above.`);
-        }
-
-        input.value = "";
-        loadGameState(); // Refresh to update table
-    } catch (err) {
-        outDiv.innerHTML = `<span class="error-text">Network error — ${err.message}</span>`;
-    }
+                <div class="attempt-count">Tested: ${data.attempts_used}</div>
+            </div>`;
+        if (data.is_match) setMessage("success", "Hash match confirmed. Submit the plaintext password above.");
+        inp.value = "";
+        loadGameState();
+    } catch (e) { out.innerHTML = `<span class="error-text">${e.message}</span>`; }
 }
 
-async function quickTestCandidate(candidate) {
-    document.getElementById("candidate-input").value = candidate;
+async function quickTest(candidate) {
+    document.getElementById("cand-input").value = candidate;
     await testCandidate();
 }
 
+
 // ── PHASE 2: SIEM LOG ANALYSIS ───────────────────────────────────────────────
+// Design intent: present the data for comparison — do not pre-label actors.
+// The behaviour-comparison panel surfaces the timing and byte data side-by-side
+// so students must draw the conclusion themselves.
 
 function renderPhase2(state) {
-    const p2 = state.phase2;
-    const rows = p2.rows || [];
-    const selected = new Set(p2.selected_rows || []);
+    const p2  = state.phase2;
+    const sel = new Set(p2.selected_rows || []);
 
-    const tableRows = rows.map(row => {
-        const isSelected = selected.has(row.id);
-        const isExternal = row.dept === "External";
-        const isFailure = row.event === "LOGIN_FAILED";
-        const isSuccess = row.event === "LOGIN_SUCCESS";
-        const isDownload = row.event === "FILE_DOWNLOAD";
+    const rows = (p2.rows || []).map(row => {
+        const isSel  = sel.has(row.id);
+        const evtCls = {
+            LOGIN_FAILED:  "event-fail",
+            LOGIN_SUCCESS: "event-success",
+            FILE_DOWNLOAD: "event-download",
+            LOGOUT:        "event-logout",
+        }[row.event] || "event-neutral";
 
-        let rowClass = "log-row";
-        if (isSelected) rowClass += " log-selected";
-        if (isExternal && !isSelected) rowClass += " log-external-hint";
-
-        const eventClass = isFailure ? "event-fail"
-            : isSuccess ? "event-success"
-            : isDownload ? "event-download"
-            : "event-neutral";
-
-        return `<tr class="${rowClass}" onclick="toggleLogRow(${row.id})" title="Click to select/deselect">
+        return `<tr class="log-row ${isSel ? "log-selected" : ""}"
+                    onclick="toggleRow(${row.id})" title="Click to select/deselect">
             <td class="log-cell log-id">${row.id}</td>
             <td class="log-cell log-time mono-sm">${escapeHtml(row.time)}</td>
             <td class="log-cell log-user mono-sm">${escapeHtml(row.user)}</td>
             <td class="log-cell log-ip mono-sm">${escapeHtml(row.ip)}</td>
-            <td class="log-cell log-event"><span class="event-badge ${eventClass}">${escapeHtml(row.event)}</span></td>
+            <td class="log-cell"><span class="event-badge ${evtCls}">${escapeHtml(row.event)}</span></td>
             <td class="log-cell log-resource mono-xs">${escapeHtml(row.resource)}</td>
             <td class="log-cell log-bytes">${row.bytes.toLocaleString()}</td>
-            <td class="log-cell log-dept dept-${row.dept.toLowerCase()}">${escapeHtml(row.dept)}</td>
-            <td class="log-cell log-select">${isSelected ? "✓" : ""}</td>
+            <td class="log-cell dept-${row.dept.toLowerCase()} mono-xs">${escapeHtml(row.dept)}</td>
+            <td class="log-cell log-sel">${isSel ? "✓" : ""}</td>
         </tr>`;
     }).join("");
 
-    const selCount = selected.size;
-    const analysisStatus = p2.analysis_unlocked
-        ? `<div class="analysis-unlocked">✓ Breach sequence confirmed (${selCount} entries selected)</div>`
-        : `<div class="analysis-pending">${selCount} entr${selCount !== 1 ? "ies" : "y"} selected — breach sequence not yet confirmed</div>`;
+    const selStatus = p2.analysis_unlocked
+        ? `<div class="analysis-unlocked">✓ Breach sequence confirmed (${sel.size} rows)</div>`
+        : `<div class="analysis-pending">${sel.size} row${sel.size !== 1 ? "s" : ""} selected</div>`;
+
+    // Behaviour comparison panel — presents raw data, no labels
+    const comparisonTable = `
+    <table class="comparison-table">
+        <thead>
+            <tr>
+                <th>Indicator</th>
+                <th>p.walsh / 185.92.73.18</th>
+                <th>c.dreyfus / 91.108.4.77</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="cmp-label">Login endpoint</td>
+                <td class="mono-xs">/portal/login</td>
+                <td class="mono-xs">/vault/auth</td>
+            </tr>
+            <tr>
+                <td class="cmp-label">Failure count</td>
+                <td>3</td>
+                <td>6</td>
+            </tr>
+            <tr>
+                <td class="cmp-label">Failure interval</td>
+                <td>12 s, 18 s, 18 s</td>
+                <td>4 s, 4 s, 4 s, 3 s, 5 s</td>
+            </tr>
+            <tr>
+                <td class="cmp-label">First resource after login</td>
+                <td class="mono-xs">/reports/public</td>
+                <td class="mono-xs">/vault/manifest</td>
+            </tr>
+            <tr>
+                <td class="cmp-label">Post-login byte total</td>
+                <td>3,400 B</td>
+                <td>133,320 B</td>
+            </tr>
+            <tr>
+                <td class="cmp-label">Time from login → first download</td>
+                <td>18 s</td>
+                <td>3 s</td>
+            </tr>
+            <tr>
+                <td class="cmp-label">Sensitive resource access</td>
+                <td>None</td>
+                <td>/vault/keys.enc</td>
+            </tr>
+            <tr>
+                <td class="cmp-label">Session end</td>
+                <td>LOGOUT event</td>
+                <td>No LOGOUT</td>
+            </tr>
+        </tbody>
+    </table>`;
 
     return `
-    <!-- Security bulletin — false positive notice -->
     <div class="brief-box bulletin-box">
         <div class="brief-label">⚠ SECURITY BULLETIN</div>
         <div class="brief-text bulletin-text">${escapeHtml(p2.bulletin)}</div>
     </div>
-
-    <!-- Selection status -->
+    <div class="brief-box">
+        <div class="brief-label">EXTERNAL ACTOR COMPARISON</div>
+        <div class="brief-text comparison-note">
+            Two undocumented external sessions triggered alerts during this window.
+            The table below aggregates their observable behaviour.
+            Draw your conclusion from the data.
+        </div>
+        ${comparisonTable}
+    </div>
     <div class="brief-box">
         <div class="brief-label">BREACH SEQUENCE SELECTION</div>
         <div class="brief-text">
-            ${analysisStatus}
+            ${selStatus}
             <div class="selection-hint">
-                Click log entries to select them. Select only the rows comprising the breach sequence.<br>
-                Correct selection unlocks the submit form.
+                Click log entries to mark them as part of the breach sequence.
+                Select only the rows that constitute the actual intrusion.
             </div>
             <div class="legend-row">
-                <span class="legend-item event-fail">LOGIN_FAILED</span>
-                <span class="legend-item event-success">LOGIN_SUCCESS</span>
-                <span class="legend-item event-download">FILE_DOWNLOAD</span>
+                <span class="legend-item event-fail">FAILED</span>
+                <span class="legend-item event-success">SUCCESS</span>
+                <span class="legend-item event-download">DOWNLOAD</span>
                 <span class="legend-item dept-external">External IP</span>
             </div>
         </div>
     </div>
-
-    <!-- SIEM Log table -->
     <div class="brief-box siem-box">
-        <div class="brief-label">SIEM LOG — ${rows.length} ENTRIES (WINDOW: 00:00 – 04:00)</div>
+        <div class="brief-label">SIEM LOG — ${(p2.rows || []).length} ENTRIES</div>
         <div class="table-scroll">
             <table class="siem-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>TIME</th>
-                        <th>USER</th>
-                        <th>SOURCE IP</th>
-                        <th>EVENT</th>
-                        <th>RESOURCE</th>
-                        <th>BYTES</th>
-                        <th>SCOPE</th>
-                        <th>SEL</th>
-                    </tr>
-                </thead>
-                <tbody>${tableRows}</tbody>
+                <thead><tr>
+                    <th>#</th><th>TIME</th><th>USER</th><th>SOURCE IP</th>
+                    <th>EVENT</th><th>RESOURCE</th><th>BYTES</th><th>SCOPE</th><th>SEL</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
             </table>
         </div>
     </div>
-
-    ${renderWrongCounter(p2.wrong_submits, 2)}
-    `;
+    ${wrongCounter(p2.wrong_submits, 2)}`;
 }
 
-async function toggleLogRow(rowId) {
+async function toggleRow(id) {
     try {
-        const res = await fetch("/phase2_toggle_row", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ row_id: rowId }),
+        const res  = await fetch("/phase2_toggle_row", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ row_id: id }),
         });
         const data = await res.json();
-
-        if (data.message) {
-            const msgType = data.analysis_unlocked ? "success" : "info";
-            setMessage(msgType, data.message);
-        }
-
+        if (data.message) setMessage(data.analysis_unlocked ? "success" : "info", data.message);
         loadGameState();
-    } catch (err) {
-        setMessage("error", `Request failed: ${err.message}`);
-    }
+    } catch (e) { setMessage("error", e.message); }
 }
 
-// ── PHASE 3: MULTI-LAYER DECODER ─────────────────────────────────────────────
+
+// ── PHASE 3: DECODE TOOL ─────────────────────────────────────────────────────
+// Design intent: tool returns raw output only, no correct/incorrect labelling.
+// Students read the output and chain steps manually.
+// The layer tracker is shown but not explained — it confirms work done,
+// not what to do next.
 
 function renderPhase3(state) {
-    const p3 = state.phase3;
+    const p3      = state.phase3;
+    const layers  = p3.layers_completed || 0;
     const attempts = p3.decode_attempts || [];
-    const layers = p3.layers_completed || 0;
 
-    const layerStatus = [
-        `<div class="layer-status ${layers >= 1 ? 'layer-done' : 'layer-pending'}">
-            ${layers >= 1 ? "✓" : "○"} Layer 1 — Outer encoding
-        </div>`,
-        `<div class="layer-status ${layers >= 2 ? 'layer-done' : 'layer-pending'}">
-            ${layers >= 2 ? "✓" : "○"} Layer 2 — Inner cipher
-        </div>`,
-    ].join("");
+    const layerDots = [1, 2].map(n =>
+        `<span class="layer-dot ${layers >= n ? "layer-done" : ""}">${layers >= n ? "✓" : "○"} Layer ${n}</span>`
+    ).join("");
 
-    // Build attempt history
-    const attemptRows = attempts.length === 0
-        ? `<div class="no-attempts">No decode attempts yet. Use the tools below.</div>`
-        : attempts.map((a, i) => `
-            <div class="attempt-entry ${a.is_correct_method ? 'attempt-good' : 'attempt-bad'}">
+    const historyHtml = attempts.length === 0
+        ? `<div class="no-attempts">No decode attempts yet.</div>`
+        : attempts.slice().reverse().map((a, i) => `
+            <div class="attempt-entry">
                 <div class="attempt-header">
-                    <span class="attempt-num">#${i + 1}</span>
+                    <span class="attempt-num">#${attempts.length - i}</span>
                     <span class="attempt-method">${escapeHtml(a.method.toUpperCase())}</span>
                     <span class="attempt-time">${escapeHtml(a.timestamp || "")}</span>
-                    ${a.input_preview ? `<span class="attempt-input">input: ${escapeHtml(a.input_preview)}</span>` : ""}
+                    ${a.input_preview ? `<span class="attempt-input-tag">from: ${escapeHtml(a.input_preview)}</span>` : ""}
                 </div>
-                <div class="attempt-output mono-xs">${escapeHtml(a.output.substring(0, 300))}${a.output.length > 300 ? "..." : ""}</div>
-                ${a.layer_info ? `<div class="attempt-layer-info">${escapeHtml(a.layer_info)}</div>` : ""}
-            </div>
-        `).join("");
+                <div class="attempt-output mono-xs">${escapeHtml(a.output.substring(0, 400))}${a.output.length > 400 ? "…" : ""}</div>
+                ${a.note ? `<div class="attempt-note">${escapeHtml(a.note)}</div>` : ""}
+            </div>`
+        ).join("");
 
     return `
-    <!-- Intercepted transmission -->
     <div class="brief-box">
         <div class="brief-label">INTERCEPTED TRANSMISSION</div>
         <div class="brief-text">
             <div class="encoded-blob mono-xs">${escapeHtml(p3.encoded)}</div>
-            <div class="blob-meta">Length: ${p3.encoded.length} chars | Charset: A-Z a-z 0-9 +/= (Base64 alphabet)</div>
+            <div class="blob-meta">Length: ${p3.encoded.length} chars</div>
         </div>
     </div>
-
-    <!-- Layer progress tracker -->
     <div class="brief-box">
-        <div class="brief-label">ENCODING LAYER TRACKER</div>
-        <div class="brief-text">${layerStatus}
-            <div class="layer-hint">Two encoding layers must be removed in sequence.</div>
+        <div class="brief-label">DECODE PROGRESS</div>
+        <div class="brief-text layer-tracker">${layerDots}
+            <span class="layer-note">Two layers to remove. Work from outer to inner.</span>
         </div>
     </div>
-
-    <!-- Decoding tools -->
     <div class="brief-box">
         <div class="brief-label">DECODE TOOLKIT</div>
         <div class="brief-text">
-            <div class="tool-note">
-                Apply tools to the original transmission OR paste intermediate output to chain decode steps.
+            <div class="tool-chain-note">
+                To chain steps: apply a tool, then paste the output into the input field
+                and apply the next tool. Leave the field empty to operate on the
+                original transmitted blob.
             </div>
-            <div class="tool-input-row">
-                <textarea id="decode-input"
-                    placeholder="Leave empty to decode the original transmission. Paste intermediate output here to chain."
-                    class="decode-textarea mono-xs" rows="3"></textarea>
-            </div>
+            <textarea id="decode-input" class="decode-textarea mono-xs" rows="3"
+                placeholder="Leave empty to decode the original blob. Paste intermediate output here to continue."></textarea>
             <div class="tool-buttons">
-                <button class="btn-tool" onclick="runDecoder('base64')" title="Base64 decode">⟳ Base64 Decode</button>
-                <button class="btn-tool" onclick="runDecoder('rot13')"  title="ROT13 substitution">⟳ ROT13</button>
-                <button class="btn-tool" onclick="runDecoder('caesar3')" title="Caesar shift -3">⟳ Caesar-3</button>
-                <button class="btn-tool" onclick="runDecoder('hex')"    title="Hex decode">⟳ Hex Decode</button>
-                <button class="btn-tool" onclick="runDecoder('url')"    title="URL decode">⟳ URL Decode</button>
+                <button class="btn-tool" onclick="runDecode('base64')">Base64</button>
+                <button class="btn-tool" onclick="runDecode('rot13')">ROT13</button>
+                <button class="btn-tool" onclick="runDecode('caesar3')">Caesar-3</button>
+                <button class="btn-tool" onclick="runDecode('hex')">Hex</button>
+                <button class="btn-tool" onclick="runDecode('url')">URL</button>
             </div>
-            <div id="decoder-live-output" class="decoder-live hidden"></div>
+            <div id="decode-live" class="decoder-live hidden"></div>
         </div>
     </div>
-
-    <!-- Attempt history -->
     <div class="brief-box">
-        <div class="brief-label">DECODE ATTEMPT HISTORY (${attempts.length})</div>
-        <div class="attempt-history">${attemptRows}</div>
+        <div class="brief-label">ATTEMPT HISTORY (newest first)</div>
+        <div class="attempt-history">${historyHtml}</div>
     </div>
-
-    ${renderWrongCounter(p3.wrong_submits, 3)}
-    `;
+    ${wrongCounter(p3.wrong_submits, 3)}`;
 }
 
-async function runDecoder(method) {
+async function runDecode(method) {
     const inputEl = document.getElementById("decode-input");
     const inputText = inputEl ? inputEl.value.trim() : "";
-    const liveOut = document.getElementById("decoder-live-output");
-
-    liveOut.className = "decoder-live";
-    liveOut.innerHTML = `<span class="computing">⟳ Applying ${method.toUpperCase()}...</span>`;
+    const live = document.getElementById("decode-live");
+    live.className = "decoder-live";
+    live.innerHTML = `<span class="computing">⟳ Applying ${escapeHtml(method)}…</span>`;
 
     try {
-        const res = await fetch("/phase3_decode", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+        const res  = await fetch("/phase3_decode", {
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ method, input_text: inputText || null }),
         });
         const data = await res.json();
 
-        const resultClass = data.is_correct_method ? "decode-correct" : "decode-incorrect";
-        liveOut.innerHTML = `
-            <div class="${resultClass}">
-                <div class="decode-method-label">${method.toUpperCase()} result:</div>
+        live.innerHTML = `
+            <div class="decode-result-block">
+                <div class="decode-method-label">${escapeHtml(method.toUpperCase())} output:</div>
                 <div class="decode-output-text mono-xs">${escapeHtml(data.output)}</div>
-                ${data.layer_info ? `<div class="decode-layer-info">${escapeHtml(data.layer_info)}</div>` : ""}
-                <button class="btn-mini" onclick="copyToDecodeInput('${escapeHtml(data.output).replace(/'/g, "\\'")}')">
+                ${data.note ? `<div class="decode-note">${escapeHtml(data.note)}</div>` : ""}
+                <button class="btn-use-output" onclick="useAsInput(${JSON.stringify(data.output)})">
                     ↓ Use as input for next step
                 </button>
-            </div>
-        `;
-
-        if (data.layers_completed >= 2) {
-            setMessage("success", "Transmission fully decoded. Extract the codename and submit.");
-        }
+            </div>`;
 
         loadGameState();
-    } catch (err) {
-        liveOut.innerHTML = `<span class="error-text">Error: ${err.message}</span>`;
+    } catch (e) {
+        live.innerHTML = `<span class="error-text">${e.message}</span>`;
     }
 }
 
-function copyToDecodeInput(text) {
+function useAsInput(text) {
     const el = document.getElementById("decode-input");
-    if (el) {
-        el.value = text;
-        el.focus();
-        setMessage("info", "Output copied to input field. Apply next decode step.");
-    }
+    if (el) { el.value = text; el.focus(); }
 }
 
-// ── PHASE 4: VAULT SYNTHESIS ─────────────────────────────────────────────────
+
+// ── PHASE 4: VLT-7 VAULT SYNTHESIS ──────────────────────────────────────────
 
 function renderPhase4(state) {
-    const fragments = state.vault_fragments || [];
-    const answers = state.phase_answers || {};
-    const p4 = state.phase4 || {};
+    const frags   = state.vault_fragments || [];
+    const answers = state.phase_answers  || {};
+    const p4      = state.phase4         || {};
 
-    const phase1pwd = answers.phase_1 || "—";
-    const phase2details = answers.phase_2 || "—";
-    const phase3token = answers.phase_3 || "—";
-
-    const fragDisplay = fragments.length
-        ? fragments.map(f => `<span class="fragment-large">${escapeHtml(f)}</span>`).join("")
+    const fragDisplay = frags.length
+        ? frags.map(f => `<span class="fragment-large">${escapeHtml(f)}</span>`).join("")
         : `<span class="muted-text">No fragments recovered</span>`;
 
     return `
-    <!-- Recovered intelligence summary -->
     <div class="brief-box">
-        <div class="brief-label">OPERATION INTELLIGENCE SUMMARY</div>
+        <div class="brief-label">RECOVERED OPERATION DATA</div>
         <div class="brief-text">
             <div class="intel-row">
-                <span class="intel-key">Phase 1 — Recovered password:</span>
-                <span class="intel-val mono-sm hint-green">${escapeHtml(phase1pwd)}</span>
+                <span class="intel-key">Phase 1 — password recovered:</span>
+                <span class="intel-val mono-sm hint-green">${escapeHtml(answers.phase_1 || "—")}</span>
             </div>
             <div class="intel-row">
-                <span class="intel-key">Phase 2 — Breach details:</span>
-                <span class="intel-val mono-sm hint-amber">${escapeHtml(phase2details)}</span>
+                <span class="intel-key">Phase 2 — confirmed breach:</span>
+                <span class="intel-val mono-sm hint-amber">${escapeHtml(answers.phase_2 || "—")}</span>
             </div>
             <div class="intel-row">
-                <span class="intel-key">Phase 3 — Codename:</span>
-                <span class="intel-val mono-sm hint-blue">${escapeHtml(phase3token)}</span>
+                <span class="intel-key">Phase 3 — codename:</span>
+                <span class="intel-val mono-sm hint-blue">${escapeHtml(answers.phase_3 || "—")}</span>
             </div>
         </div>
     </div>
-
-    <!-- Vault fragments -->
     <div class="brief-box">
-        <div class="brief-label">VAULT FRAGMENTS (in phase order)</div>
+        <div class="brief-label">VAULT FRAGMENTS (phase order)</div>
         <div class="fragment-display">${fragDisplay}</div>
     </div>
-
-    <!-- Synthesis formula -->
     <div class="brief-box formula-box">
-        <div class="brief-label">SYNTHESIS FORMULA</div>
+        <div class="brief-label">VLT-7 ASSEMBLY PROTOCOL</div>
         <div class="brief-text formula-text mono-sm">
-            <div class="formula-step">
-                <span class="step-num">1.</span> Concatenate fragments: 
+            <div class="vlt-intro">
+                Vault firmware protocol VLT-7 requires a reflected-entry sequence.
+                Assemble the code, then reverse it before submission.
+            </div>
+            <div class="formula-step"><span class="step-num">1.</span>
+                Concatenate vault fragments in phase order:
                 <span class="hint-green">Fragment₁ + Fragment₂ + Fragment₃</span>
             </div>
-            <div class="formula-step">
-                <span class="step-num">2.</span> Append: 
-                <span class="hint-amber">character count of Phase 1 plaintext password</span>
+            <div class="formula-step"><span class="step-num">2.</span>
+                Append character count of the Phase 1 plaintext password.
             </div>
-            <div class="formula-step">
-                <span class="step-num">3.</span> Append: 
-                <span class="hint-blue">count of unique attacker IPs confirmed in Phase 2</span>
+            <div class="formula-step"><span class="step-num">3.</span>
+                Append count of unique malicious IPs confirmed in Phase 2.
             </div>
-            <div class="formula-step formula-step-final">
-                <span class="step-num">4.</span> 
-                <span class="hint-red">REVERSE the entire assembled numeric string</span>
+            <div class="formula-step formula-step-final"><span class="step-num">4.</span>
+                <span class="hint-red">VLT-7 reflection: reverse the complete digit string.</span>
             </div>
             <div class="formula-example">
-                Example (not actual values): fragments "1","2","3" + pwLen=8 + ipCount=2 
-                → "12382" → reversed → <strong>"28321"</strong>
+                Example: fragments "1","2","3" + pwLen=8 + ipCount=2 → "12382" → reversed → "28321"
             </div>
         </div>
     </div>
-
-    ${renderWrongCounter(p4.wrong_submits, 4)}
-    `;
+    ${wrongCounter(p4.wrong_submits, 4)}`;
 }
 
-// ── MAIN GAME LOADER ─────────────────────────────────────────────────────────
+
+// ── MAIN LOADER ───────────────────────────────────────────────────────────────
 
 async function loadGameState() {
     try {
-        const res = await fetch("/get_game_state");
+        const res   = await fetch("/get_game_state");
         const state = await res.json();
         currentState = state;
 
@@ -583,19 +517,17 @@ async function loadGameState() {
         renderRecoveredEvidence(state.phase_answers);
         renderHints(state.hints || []);
 
-        document.getElementById("phase-title").innerHTML = state.title || "";
-        document.getElementById("phase-description").innerHTML = state.description || "";
-        document.getElementById("phase-objective").textContent = state.objective || "";
-        document.getElementById("phase-task-brief").innerHTML = state.task_brief || "";
-        document.getElementById("answer-label").textContent = state.answer_label || "";
+        document.getElementById("phase-title").innerHTML       = state.title || "";
+        document.getElementById("phase-description").innerHTML  = state.description || "";
+        document.getElementById("phase-objective").textContent  = state.objective || "";
+        document.getElementById("phase-task-brief").innerHTML   = state.task_brief || "";
+        document.getElementById("answer-label").textContent     = state.answer_label || "";
 
-        const phaseUI = document.getElementById("phase-ui");
+        const banner = document.getElementById("lockout-banner");
+        if (banner) banner.style.display = state.lockout_warned ? "block" : "none";
 
-        // Lockout warning banner
-        const lockoutBanner = document.getElementById("lockout-banner");
-        if (lockoutBanner) {
-            lockoutBanner.style.display = state.lockout_warned ? "block" : "none";
-        }
+        const phaseUI  = document.getElementById("phase-ui");
+        const answerFm = document.getElementById("answer-form");
 
         if (state.completed) {
             phaseUI.innerHTML = `
@@ -608,100 +540,75 @@ async function loadGameState() {
                     </div>
                     <button class="btn-reset-final" onclick="resetGame()">↺ Run Again</button>
                 </div>`;
-            document.getElementById("answer-form").style.display = "none";
+            answerFm.style.display = "none";
             return;
         }
 
-        document.getElementById("answer-form").style.display = "block";
+        answerFm.style.display = "block";
         document.getElementById("answer-input").value = "";
 
-        // Render phase-specific UI
         const p = state.progress;
-        if (p === 1) {
-            phaseUI.innerHTML = renderPhase1(state);
-        } else if (p === 2) {
-            phaseUI.innerHTML = renderPhase2(state);
-        } else if (p === 3) {
-            phaseUI.innerHTML = renderPhase3(state);
-        } else if (p === 4) {
-            phaseUI.innerHTML = renderPhase4(state);
-        } else {
-            phaseUI.innerHTML = "";
-        }
+        if      (p === 1) phaseUI.innerHTML = renderPhase1(state);
+        else if (p === 2) phaseUI.innerHTML = renderPhase2(state);
+        else if (p === 3) phaseUI.innerHTML = renderPhase3(state);
+        else if (p === 4) phaseUI.innerHTML = renderPhase4(state);
+        else              phaseUI.innerHTML = "";
 
-    } catch (err) {
-        console.error("loadGameState error:", err);
-        setMessage("error", `State load failed: ${err.message}. Try refreshing.`);
+    } catch (e) {
+        console.error("loadGameState:", e);
+        setMessage("error", `State load failed: ${e.message}`);
     }
 }
 
-// ── ANSWER SUBMISSION ─────────────────────────────────────────────────────────
+
+// ── SUBMIT ────────────────────────────────────────────────────────────────────
 
 async function submitAnswer() {
-    const input = document.getElementById("answer-input");
+    const input  = document.getElementById("answer-input");
     const answer = input.value.trim();
-
-    if (!answer) {
-        setMessage("error", "Enter an answer before submitting.");
-        return;
-    }
+    if (!answer) { setMessage("error", "Enter an answer before submitting."); return; }
 
     const btn = document.getElementById("submit-btn");
-    btn.disabled = true;
-    btn.textContent = "Verifying...";
+    btn.disabled = true; btn.textContent = "Verifying…";
 
     try {
-        const res = await fetch("/submit_answer", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+        const res  = await fetch("/submit_answer", {
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ answer }),
         });
         const data = await res.json();
 
         if (data.success) {
-            if (data.completed) {
-                setMessage("success", `🔓 ${data.message}`);
-            } else {
-                setMessage("success", data.message);
-            }
+            setMessage("success", data.message);
             input.value = "";
             loadGameState();
         } else {
-            const penaltyClass = data.penalty ? "penalty" : "error";
-            setMessage(penaltyClass, data.message || "Incorrect answer.");
+            setMessage(data.penalty ? "penalty" : "error", data.message || "Incorrect.");
         }
-    } catch (err) {
-        setMessage("error", `Submission failed: ${err.message}`);
+    } catch (e) {
+        setMessage("error", `Submission error: ${e.message}`);
     } finally {
-        btn.disabled = false;
-        btn.textContent = "Submit";
+        btn.disabled = false; btn.textContent = "Submit";
     }
 }
 
 async function resetGame() {
-    if (!confirm("Reset the game? All progress will be lost.")) return;
+    if (!confirm("Reset all progress?")) return;
     await fetch("/reset", { method: "POST" });
     setMessage("info", "Session reset. Starting from Phase 1.");
     loadGameState();
 }
 
-// ── HINT TOGGLE ───────────────────────────────────────────────────────────────
-
 function toggleHints() {
     const panel = document.getElementById("hint-panel");
-    const btn = document.getElementById("hint-toggle-btn");
-    const isHidden = panel.style.display === "none" || !panel.style.display;
-    panel.style.display = isHidden ? "block" : "none";
-    btn.textContent = isHidden ? "▲ Hide Intel" : "▼ View Intel (Hints)";
+    const btn   = document.getElementById("hint-toggle-btn");
+    const show  = panel.style.display === "none" || !panel.style.display;
+    panel.style.display = show ? "block" : "none";
+    btn.textContent     = show ? "▲ Hide Intel" : "▼ View Intel (Hints)";
 }
 
-// ── KEYBOARD SHORTCUTS ────────────────────────────────────────────────────────
-
 document.addEventListener("keydown", e => {
-    if (e.key === "Enter" && document.activeElement.id === "answer-input") {
-        submitAnswer();
-    }
+    if (e.key === "Enter" && document.activeElement.id === "answer-input") submitAnswer();
 });
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", loadGameState);

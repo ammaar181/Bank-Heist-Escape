@@ -3,153 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bank Heist // Intrusion Simulation</title>
+    <title>Fortis Bank — Security Override</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="game-body">
-    <div class="game-bg"></div>
+<div class="game-bg"></div>
 
-    <!-- LOCKOUT WARNING BANNER -->
-    <div id="lockout-banner" class="lockout-banner" style="display:none;">
-        ⚠ SECURITY ALERT: Excessive failed submissions detected. In a real environment,
-        your access would be locked. Review your reasoning before attempting further submissions.
-    </div>
+<!-- Lockout warning — shown after LOCKOUT_THRESHOLD wrong submissions -->
+<div id="lockout-banner" class="lockout-banner" style="display:none;">
+    ⚠ SECURITY ALERT: Excessive failed submissions recorded.
+    In a live environment this account would be suspended. Review your analysis carefully.
+</div>
 
-    <main class="game-wrap">
+<main class="game-wrap">
 
-        <!-- HEADER -->
-        <header class="game-header">
-            <div class="header-left">
-                <div class="eyebrow">BANK NETWORK // LIVE INTRUSION SIMULATION</div>
-                <h1 class="system-title">FORTIS BANK — SECURITY OVERRIDE</h1>
+    <!-- ── HEADER ── -->
+    <header class="game-header">
+        <div class="header-left">
+            <div class="eyebrow">FORTIS BANK // SECURITY OVERRIDE // LIVE SESSION</div>
+            <h1 class="system-title">VAULT INTRUSION SIMULATION</h1>
+        </div>
+        <div class="header-right">
+            <div class="live-status">⬤ Active</div>
+            <button class="btn-reset-header" onclick="resetGame()">↺ Reset</button>
+        </div>
+    </header>
+
+    <!-- ── HUD ── -->
+    <section class="hud-row">
+        <div class="hud-card">
+            <div class="hud-label">Phase</div>
+            <div class="hud-value" id="progress-text">1 / 4</div>
+        </div>
+        <div class="hud-card wide-card">
+            <div class="hud-label">Objective</div>
+            <div class="hud-value hud-obj" id="phase-objective">Loading…</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Complete</div>
+            <div class="hud-value" id="progress-percentage">0%</div>
+        </div>
+    </section>
+
+    <!-- ── PROGRESS BAR ── -->
+    <section class="progress-box">
+        <div class="progress-meta">
+            <span>Operation progress</span>
+            <span id="progress-percentage-bar">0%</span>
+        </div>
+        <div class="progress-track">
+            <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+    </section>
+
+    <!-- ── MAIN GRID ── -->
+    <section class="game-grid">
+
+        <!-- Left: challenge panel -->
+        <div class="panel main-panel">
+            <div class="panel-tag">ACTIVE CHALLENGE</div>
+            <h2 class="panel-phase-title" id="phase-title">Loading…</h2>
+            <p class="panel-text panel-description" id="phase-description"></p>
+
+            <div class="brief-box task-brief-box">
+                <div class="brief-label">MISSION BRIEF</div>
+                <div class="brief-text" id="phase-task-brief">Loading…</div>
             </div>
-            <div class="header-right">
-                <div class="live-status" id="status-pill">⬤ Operation Active</div>
-                <button class="btn-reset-header" onclick="resetGame()">↺ Reset</button>
-            </div>
-        </header>
 
-        <!-- HUD ROW -->
-        <section class="hud-row">
-            <div class="hud-card">
-                <div class="hud-label">Phase Progress</div>
-                <div class="hud-value" id="progress-text">1 / 4</div>
-            </div>
-            <div class="hud-card wide-card">
-                <div class="hud-label">Current Objective</div>
-                <div class="hud-value hud-obj" id="phase-objective">Loading...</div>
-            </div>
-            <div class="hud-card">
-                <div class="hud-label">Completion</div>
-                <div class="hud-value" id="progress-percentage">0%</div>
-            </div>
-        </section>
+            <!-- Phase-specific UI injected here -->
+            <div id="phase-ui"></div>
 
-        <!-- PROGRESS BAR -->
-        <section class="progress-box">
-            <div class="progress-meta">
-                <span>Operation Progress</span>
-                <span id="progress-percentage-bar">0%</span>
-            </div>
-            <div class="progress-track">
-                <div class="progress-bar-fill" id="progress-fill"></div>
-            </div>
-        </section>
-
-        <!-- MAIN GRID -->
-        <section class="game-grid">
-
-            <!-- ── LEFT: MAIN CHALLENGE PANEL ── -->
-            <div class="panel main-panel">
-
-                <div class="panel-tag">ACTIVE CHALLENGE</div>
-                <h2 class="panel-phase-title" id="phase-title">Loading...</h2>
-                <p class="panel-text panel-description" id="phase-description">Retrieving challenge data...</p>
-
-                <!-- Task Brief -->
-                <div class="brief-box task-brief-box">
-                    <div class="brief-label">MISSION BRIEF</div>
-                    <div class="brief-text" id="phase-task-brief">Loading brief...</div>
+            <!-- Answer submission -->
+            <div id="answer-form" class="answer-section">
+                <label class="answer-label" for="answer-input" id="answer-label">Enter your answer</label>
+                <div class="answer-row">
+                    <input type="text" id="answer-input" class="input-field"
+                        placeholder="Type your answer here…"
+                        autocomplete="off" spellcheck="false" />
+                    <button class="btn-submit" id="submit-btn" onclick="submitAnswer()">▶ Submit</button>
                 </div>
+            </div>
 
-                <!-- Dynamic Phase UI injected here -->
-                <div id="phase-ui"></div>
+            <div class="message-box neutral" id="result">Awaiting submission…</div>
+        </div>
 
-                <!-- Answer Submission Form -->
-                <div id="answer-form" class="answer-section">
-                    <label class="answer-label" for="answer-input" id="answer-label">
-                        Enter your answer
-                    </label>
-                    <div class="answer-row">
-                        <input
-                            type="text"
-                            id="answer-input"
-                            class="input-field"
-                            placeholder="Type your answer here..."
-                            autocomplete="off"
-                            spellcheck="false"
-                        />
-                        <button class="btn-submit" id="submit-btn" onclick="submitAnswer()">
-                            ▶ Submit
-                        </button>
-                    </div>
+        <!-- Right: sidebar -->
+        <aside class="panel side-panel">
+            <div class="panel-tag">INSIDER INTEL</div>
+            <h3 class="side-title">Inside Man</h3>
+            <p class="panel-text side-desc">
+                Your contact cannot access the system directly but can provide
+                contextual intelligence. Consult only when stuck.
+            </p>
+
+            <button class="btn-hint-toggle" id="hint-toggle-btn" onclick="toggleHints()">
+                ▼ View Intel (Hints)
+            </button>
+            <div id="hint-panel" style="display:none;">
+                <ul class="hint-list" id="hint-list"><li>Loading…</li></ul>
+            </div>
+
+            <div class="brief-box side-brief-box" style="margin-top:16px;">
+                <div class="brief-label">VAULT FRAGMENTS</div>
+                <div class="brief-text" id="vault-fragments">None recovered yet</div>
+            </div>
+
+            <div class="brief-box side-brief-box" style="margin-top:10px;">
+                <div class="brief-label">RECOVERED EVIDENCE</div>
+                <div class="brief-text" id="recovered-evidence">No evidence yet.</div>
+            </div>
+
+            <div class="brief-box side-brief-box phase-ref" style="margin-top:10px;">
+                <div class="brief-label">PHASE MAP</div>
+                <div class="brief-text">
+                    <div class="phase-ref-item">1 — Salted SHA-256 Recovery</div>
+                    <div class="phase-ref-item">2 — SIEM Log Forensics</div>
+                    <div class="phase-ref-item">3 — Encoded Transmission</div>
+                    <div class="phase-ref-item">4 — VLT-7 Vault Assembly</div>
                 </div>
+            </div>
+        </aside>
 
-                <!-- Result Message Box -->
-                <div class="message-box neutral" id="result">Awaiting submission...</div>
+    </section>
+</main>
 
-            </div><!-- /main-panel -->
-
-            <!-- ── RIGHT: SIDEBAR ── -->
-            <aside class="panel side-panel">
-
-                <!-- Insider intel / hints -->
-                <div class="panel-tag">INSIDER INTEL</div>
-                <h3 class="side-title">Inside Man</h3>
-                <p class="panel-text side-desc">
-                    Your contact cannot directly touch the system, but can feed intelligence
-                    to keep the operation moving. Use hints only if stuck.
-                </p>
-
-                <button class="btn-hint-toggle" id="hint-toggle-btn" onclick="toggleHints()">
-                    ▼ View Intel (Hints)
-                </button>
-
-                <div id="hint-panel" style="display:none;">
-                    <ul class="hint-list" id="hint-list">
-                        <li>Loading hints...</li>
-                    </ul>
-                </div>
-
-                <!-- Vault Fragments -->
-                <div class="brief-box side-brief-box" style="margin-top: 18px;">
-                    <div class="brief-label">VAULT FRAGMENTS RECOVERED</div>
-                    <div class="brief-text" id="vault-fragments">None recovered yet</div>
-                </div>
-
-                <!-- Recovered Evidence -->
-                <div class="brief-box side-brief-box" style="margin-top: 12px;">
-                    <div class="brief-label">RECOVERED EVIDENCE</div>
-                    <div class="brief-text" id="recovered-evidence">No evidence recovered yet.</div>
-                </div>
-
-                <!-- Phase Reference Card -->
-                <div class="brief-box side-brief-box phase-ref" style="margin-top: 12px;">
-                    <div class="brief-label">PHASE MAP</div>
-                    <div class="brief-text">
-                        <div class="phase-ref-item" id="pref-1">1. Salted Hash Recovery</div>
-                        <div class="phase-ref-item" id="pref-2">2. SIEM Log Forensics</div>
-                        <div class="phase-ref-item" id="pref-3">3. Multi-Layer Decoding</div>
-                        <div class="phase-ref-item" id="pref-4">4. Vault Synthesis</div>
-                    </div>
-                </div>
-
-            </aside><!-- /side-panel -->
-
-        </section><!-- /game-grid -->
-
-    </main>
-
-    <script src="/static/game.js"></script>
+<script src="/static/game.js"></script>
 </body>
 </html>
